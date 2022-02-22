@@ -88,6 +88,16 @@ class GhostEventProcessor extends EventProcessor {
                 opened_at: this.db.knex.raw('COALESCE(opened_at, ?)', [moment.utc(event.timestamp).format('YYYY-MM-DD HH:mm:ss')])
             });
 
+        await this.db.knex('members')
+            .where('email', '=', event.recipientEmail)
+            .andWhere(builder => builder
+                .where('last_seen_at', '<', moment.utc(event.timestamp).subtract(24, 'hours').format('YYYY-MM-DD HH:mm:ss'))
+                .orWhereNull('last_seen_at')
+            )
+            .update({
+                last_seen_at: moment.utc(event.timestamp).format('YYYY-MM-DD HH:mm:ss')
+            });
+
         return updateResult > 0;
     }
 
