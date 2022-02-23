@@ -2485,7 +2485,19 @@
     lodash "^4.17.21"
     moment "^2.24.0"
 
-"@tryghost/url-utils@2.0.5", "@tryghost/url-utils@^2.0.0":
+"@tryghost/url-utils@2.0.6":
+  version "2.0.6"
+  resolved "https://registry.yarnpkg.com/@tryghost/url-utils/-/url-utils-2.0.6.tgz#e8c09a9452ca991ff4d9d2271ca2d9517c3f77c6"
+  integrity sha512-mEGGV8QcHoxc/S9Rlzo/y7L1mZXl7OFu9nzPtwnFumtbBQ6bRF2Bteh7+9HA3+1eFqy1sWi3VrSNu3b4koC91A==
+  dependencies:
+    cheerio "^0.22.0"
+    moment "^2.27.0"
+    moment-timezone "^0.5.31"
+    remark "^11.0.2"
+    remark-footnotes "^1.0.0"
+    unist-util-visit "^2.0.0"
+
+"@tryghost/url-utils@^2.0.0":
   version "2.0.5"
   resolved "https://registry.yarnpkg.com/@tryghost/url-utils/-/url-utils-2.0.5.tgz#50b0034def611ff017c28bbb153675c49f43a977"
   integrity sha512-g0ByV2IExezz+Sec0LfTtziZ8b6nUMdLkS4xc2IdbBFMLCHjChkhR4bSBat84/YuPIdV8rGph1Ne0cgbM2Ibww==
