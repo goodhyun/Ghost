@@ -16,6 +16,7 @@ const models = require('../../models');
 const {GhostMailer} = require('../mail');
 const jobsService = require('../jobs');
 const VerificationTrigger = require('@tryghost/verification-trigger');
+const LastSeenAtUpdater = require('@tryghost/last-seen-at-updater');
 const events = require('../../lib/common/events');
 
 const messages = {
@@ -139,7 +140,7 @@ module.exports = {
             sendVerificationEmail: ({subject, message, amountImported}) => {
                 const escalationAddress = config.get('hostSettings:emailVerification:escalationAddress');
                 const fromAddress = config.get('user_email');
-    
+
                 if (escalationAddress) {
                     ghostMailer.send({
                         subject,
@@ -157,6 +158,8 @@ module.exports = {
             Settings: models.Settings,
             eventRepository: membersApi.events
         });
+
+        new LastSeenAtUpdater({db});
 
         (async () => {
             try {
