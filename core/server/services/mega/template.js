@@ -1,6 +1,6 @@
 /* eslint indent: warn, no-irregular-whitespace: warn */
 const iff = (cond, yes, no) => (cond ? yes : no);
-module.exports = ({post, site, templateSettings}) => {
+module.exports = ({post, site, newsletter, templateSettings}) => {
     const date = new Date();
     const hasFeatureImageCaption = templateSettings.showFeatureImage && post.feature_image && post.feature_image_caption;
     return `<!doctype html>
@@ -198,46 +198,53 @@ h5,
 h6 {
     margin-top: 0;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
-    line-height: 1.15em;
-    font-weight: 600;
+    line-height: 1.11em;
+    font-weight: 700;
     text-rendering: optimizeLegibility;
 }
 
 h1 {
     margin: 1.5em 0 0.5em 0;
     font-size: 42px;
-    font-weight: 600;
+    font-weight: 700;
 }
 
 h2 {
     margin: 1.5em 0 0.5em 0;
     font-size: 32px;
-    line-height: 1.22em;
 }
 
 h3 {
     margin: 1.5em 0 0.5em 0;
     font-size: 26px;
-    line-height: 1.25em;
 }
 
 h4 {
     margin: 1.8em 0 0.5em 0;
     font-size: 21px;
-    line-height: 1.3em;
+    line-height: 1.2em;
 }
 
 h5 {
     margin: 2em 0 0.5em 0;
     font-size: 19px;
-    line-height: 1.4em;
+    line-height: 1.3em;
 }
 
 h6 {
     margin: 2em 0 0.5em 0;
     font-size: 19px;
-    line-height: 1.4em;
+    line-height: 1.3em;
     font-weight: 700;
+}
+
+h1 strong,
+h2 strong,
+h3 strong,
+h4 strong,
+h5 strong,
+h6 strong {
+    font-weight: 800;
 }
 
 strong {
@@ -263,6 +270,7 @@ code {
 
 pre {
     white-space: pre-wrap;
+    overflow: auto;
     background: #15212A;
     padding: 15px;
     border-radius: 3px;
@@ -300,6 +308,10 @@ figure blockquote p {
 
 .site-info {
     padding-top: 50px;
+}
+
+.site-info-bordered {
+    padding-top: 50px;
     border-bottom: 1px solid #e5eff5;
 }
 
@@ -310,6 +322,9 @@ figure blockquote p {
     font-weight: 700;
     text-transform: uppercase;
     text-align: center;
+}
+
+.site-url-bottom-padding {
     padding-bottom: 50px;
 }
 
@@ -317,15 +332,23 @@ figure blockquote p {
     color: #15212A;
 }
 
+.site-subtitle {
+    color: #8695a4;
+    font-size: 14px;
+    font-weight: 400;
+    text-transform: none;
+}
+
 .post-title {
     padding-bottom: 10px;
     font-size: 42px;
     line-height: 1.1em;
-    font-weight: 600;
+    font-weight: 700;
     text-align: center;
 }
 .post-title-serif {
     font-family: Georgia, serif;
+    letter-spacing: -0.01em;
 }
 .post-title-left {
     text-align: left;
@@ -387,7 +410,7 @@ figure blockquote p {
     font-family: Georgia, serif;
     font-size: 18px;
     line-height: 1.5em;
-    color: #23323D;
+    color: #15212A;
     padding-bottom: 20px;
     border-bottom: 1px solid #e5eff5;
 }
@@ -396,7 +419,7 @@ figure blockquote p {
     max-width: 600px !important;
     font-size: 17px;
     line-height: 1.5em;
-    color: #23323D;
+    color: #15212A;
     padding-bottom: 20px;
     border-bottom: 1px solid #e5eff5;
 }
@@ -710,7 +733,7 @@ a[data-flickr-embed] img {
 }
 
 .kg-header-card h3 strong {
-    font-weight: 600;
+    font-weight: 700;
 }
 
 .kg-header-card.kg-size-large h3 {
@@ -1145,9 +1168,9 @@ ${ templateSettings.showBadge ? `
                                     ` : ''}
 
 
-                                    ${ templateSettings.showHeaderIcon || templateSettings.showHeaderTitle ? `
+                                    ${ templateSettings.showHeaderIcon || templateSettings.showHeaderTitle || templateSettings.showHeaderName ? `
                                     <tr>
-                                        <td class="site-info" width="100%" align="center">
+                                        <td class="${templateSettings.showHeaderTitle ? `site-info-bordered` : `site-info`}" width="100%" align="center">
                                             <table role="presentation" border="0" cellpadding="0" cellspacing="0">
                                                 ${ templateSettings.showHeaderIcon && site.iconUrl ? `
                                                 <tr>
@@ -1156,9 +1179,20 @@ ${ templateSettings.showBadge ? `
                                                 ` : ``}
                                                 ${ templateSettings.showHeaderTitle ? `
                                                 <tr>
-                                                    <td class="site-url"><div style="width: 100% !important;"><a href="${site.url}" class="site-title">${site.title}</a></div></td>
+                                                    <td class="site-url ${!templateSettings.showHeaderName ? 'site-url-bottom-padding' : ''}"><div style="width: 100% !important;"><a href="${site.url}" class="site-title">${site.title}</a></div></td>
                                                 </tr>
                                                 ` : ``}
+                                                ${ templateSettings.showHeaderName && templateSettings.showHeaderTitle ? `
+                                                <tr>
+                                                    <td class="site-url site-url-bottom-padding"><div style="width: 100% !important;"><a href="${site.url}" class="site-subtitle">${newsletter.name}</a></div></td>
+                                                </tr>
+                                                ` : ``}
+                                                ${ templateSettings.showHeaderName && !templateSettings.showHeaderTitle ? `
+                                                <tr>
+                                                    <td class="site-url site-url-bottom-padding"><div style="width: 100% !important;"><a href="${site.url}" class="site-title">${newsletter.name}</a></div></td>
+                                                </tr>
+                                                ` : ``}
+
                                             </table>
                                         </td>
                                     </tr>

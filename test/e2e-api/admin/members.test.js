@@ -10,23 +10,61 @@ const Papa = require('papaparse');
 
 const models = require('../../../core/server/models');
 
-async function assertEvents({eventType, eventName, quantity, asserts}) {
-    const events = await models[eventType].findAll();
-    assert.equal(events.models.length, quantity, `Only one ${eventType} should have been added after ${eventName}.`);
-    const event = events.models[events.models.length - 1].toJSON();
-
-    for (const attribute of Object.keys(assert)) {
-        const value = asserts[attribute];
-        assert.equal(event[attribute], value, `The ${attribute} attribute of ${eventType} should have been ${value}`);
+async function assertMemberEvents({eventType, memberId, asserts}) {
+    const events = await models[eventType].where('member_id', memberId).fetchAll();
+    const eventsJSON = events.map(e => e.toJSON());
+    
+    // Order shouldn't matter here
+    for (const a of asserts) {
+        eventsJSON.should.matchAny(a);
     }
+    assert.equal(events.length, asserts.length, `Only ${asserts.length} ${eventType} should have been added.`);
 }
 
-const memberMatcherNoIncludes = {
+async function assertSubscription(subscriptionId, asserts) {
+    // eslint-disable-next-line dot-notation
+    const subscription = await models['StripeCustomerSubscription'].where('subscription_id', subscriptionId).fetch({require: true});
+
+    // We use the native toJSON to prevent calling the overriden serialize method
+    models.Base.Model.prototype.serialize.call(subscription).should.match(asserts);
+}
+
+async function getPaidProduct() {
+    return await models.Product.findOne({type: 'paid'});
+}
+
+async function getNewsletters() {
+    return (await models.Newsletter.findAll({filter: 'status:active'})).models;
+}
+
+const newsletterSnapshot = {
     id: anyObjectId,
     uuid: anyUuid,
     created_at: anyISODateTime,
     updated_at: anyISODateTime
 };
+
+function buildMemberWithoutIncludesSnapshot(options) {
+    return {
+        id: anyObjectId,
+        uuid: anyUuid,
+        created_at: anyISODateTime,
+        updated_at: anyISODateTime,
+        newsletters: new Array(options.newsletters).fill(newsletterSnapshot)
+    };
+}
+
+function buildMemberWithIncludesSnapshot(options) {
+    return {
+        id: anyObjectId,
+        uuid: anyUuid,
+        created_at: anyISODateTime,
+        updated_at: anyISODateTime,
+        newsletters: new Array(options.newsletters).fill(newsletterSnapshot),
+        subscriptions: anyArray,
+        labels: anyArray
+    };
+}
 
 const memberMatcherShallowIncludes = {
     id: anyObjectId,
@@ -34,7 +72,8 @@ const memberMatcherShallowIncludes = {
     created_at: anyISODateTime,
     updated_at: anyISODateTime,
     subscriptions: anyArray,
-    labels: anyArray
+    labels: anyArray,
+    newsletters: anyArray
 };
 
 let agent;
@@ -49,11 +88,10 @@ describe('Members API without Stripe', function () {
     before(async function () {
         await agent
             .delete('/settings/stripe/connect/')
-            .expectStatus(200);
+            .expectStatus(204);
     });
 
     beforeEach(function () {
-        mockManager.mockLabsEnabled('membersLastSeenFilter');
         mockManager.mockMail();
     });
 
@@ -83,15 +121,17 @@ describe('Members API without Stripe', function () {
 });
 
 describe('Members API', function () {
+    let newsletters;
+
     before(async function () {
         agent = await agentProvider.getAdminAPIAgent();
-        await fixtureManager.init('members');
+        await fixtureManager.init('newsletters', 'members:newsletters');
         await agent.loginAsOwner();
+
+        newsletters = await getNewsletters();
     });
 
     beforeEach(function () {
-        mockManager.mockLabsEnabled('multipleProducts');
-        mockManager.mockLabsEnabled('membersLastSeenFilter');
         mockManager.mockStripe();
         mockManager.mockMail();
     });
@@ -107,14 +147,7 @@ describe('Members API', function () {
             .get('/members/')
             .expectStatus(200)
             .matchBodySnapshot({
-                members: new Array(8).fill({
-                    id: anyObjectId,
-                    uuid: anyUuid,
-                    created_at: anyISODateTime,
-                    updated_at: anyISODateTime,
-                    labels: anyArray,
-                    subscriptions: anyArray
-                })
+                members: new Array(8).fill(memberMatcherShallowIncludes)
             })
             .matchHeaderSnapshot({
                 etag: anyEtag
@@ -126,14 +159,7 @@ describe('Members API', function () {
             .get('/members/?filter=label:label-1')
             .expectStatus(200)
             .matchBodySnapshot({
-                members: new Array(1).fill({
-                    id: anyObjectId,
-                    uuid: anyUuid,
-                    created_at: anyISODateTime,
-                    updated_at: anyISODateTime,
-                    labels: anyArray,
-                    subscriptions: anyArray
-                })
+                members: new Array(1).fill(memberMatcherShallowIncludes)
             })
             .matchHeaderSnapshot({
                 etag: anyEtag
@@ -145,14 +171,7 @@ describe('Members API', function () {
             .get('/members/?search=member1')
             .expectStatus(200)
             .matchBodySnapshot({
-                members: new Array(1).fill({
-                    id: anyObjectId,
-                    uuid: anyUuid,
-                    created_at: anyISODateTime,
-                    updated_at: anyISODateTime,
-                    labels: anyArray,
-                    subscriptions: anyArray
-                })
+                members: new Array(1).fill(memberMatcherShallowIncludes)
             })
             .matchHeaderSnapshot({
                 etag: anyEtag
@@ -164,14 +183,7 @@ describe('Members API', function () {
             .get('/members/?filter=status:paid')
             .expectStatus(200)
             .matchBodySnapshot({
-                members: new Array(5).fill({
-                    id: anyObjectId,
-                    uuid: anyUuid,
-                    created_at: anyISODateTime,
-                    updated_at: anyISODateTime,
-                    labels: anyArray,
-                    subscriptions: anyArray
-                })
+                members: new Array(5).fill(memberMatcherShallowIncludes)
             })
             .matchHeaderSnapshot({
                 etag: anyEtag
@@ -183,14 +195,7 @@ describe('Members API', function () {
             .get(`/members/?filter=name:~'Venkman'`)
             .expectStatus(200)
             .matchBodySnapshot({
-                members: new Array(1).fill({
-                    id: anyObjectId,
-                    uuid: anyUuid,
-                    created_at: anyISODateTime,
-                    updated_at: anyISODateTime,
-                    labels: anyArray,
-                    subscriptions: anyArray
-                })
+                members: new Array(1).fill(memberMatcherShallowIncludes)
             })
             .matchHeaderSnapshot({
                 etag: anyEtag
@@ -202,14 +207,7 @@ describe('Members API', function () {
             .get('/members/?filter=status:paid&include=emailRecipients')
             .expectStatus(200)
             .matchBodySnapshot({
-                members: new Array(5).fill({
-                    id: anyObjectId,
-                    uuid: anyUuid,
-                    created_at: anyISODateTime,
-                    updated_at: anyISODateTime,
-                    labels: anyArray,
-                    subscriptions: anyArray
-                })
+                members: new Array(5).fill(memberMatcherShallowIncludes)
             })
             .matchHeaderSnapshot({
                 etag: anyEtag
@@ -303,14 +301,7 @@ describe('Members API', function () {
             .get(`/members/${testUtils.DataGenerator.Content.members[0].id}/`)
             .expectStatus(200)
             .matchBodySnapshot({
-                members: new Array(1).fill({
-                    id: anyObjectId,
-                    uuid: anyUuid,
-                    created_at: anyISODateTime,
-                    updated_at: anyISODateTime,
-                    labels: anyArray,
-                    subscriptions: anyArray
-                })
+                members: new Array(1).fill(memberMatcherShallowIncludes)
             })
             .matchHeaderSnapshot({
                 etag: anyEtag
@@ -322,14 +313,7 @@ describe('Members API', function () {
             .get(`/members/${testUtils.DataGenerator.Content.members[0].id}/?include=email_recipients`)
             .expectStatus(200)
             .matchBodySnapshot({
-                members: new Array(1).fill({
-                    id: anyObjectId,
-                    uuid: anyUuid,
-                    created_at: anyISODateTime,
-                    updated_at: anyISODateTime,
-                    labels: anyArray,
-                    subscriptions: anyArray
-                })
+                members: new Array(1).fill(memberMatcherShallowIncludes)
             })
             .matchHeaderSnapshot({
                 etag: anyEtag
@@ -343,39 +327,37 @@ describe('Members API', function () {
             name: 'test',
             email: 'memberTestAdd@test.com',
             note: 'test note',
-            subscribed: false,
+            newsletters: [],
             labels: ['test-label']
         };
 
-        await agent
+        const {body} = await agent
             .post(`/members/`)
             .body({members: [member]})
             .expectStatus(201)
             .matchBodySnapshot({
-                members: new Array(1).fill({
-                    id: anyObjectId,
-                    uuid: anyUuid,
-                    created_at: anyISODateTime,
-                    updated_at: anyISODateTime,
-                    labels: anyArray,
-                    subscriptions: anyArray
-                })
+                members: new Array(1).fill(memberMatcherShallowIncludes)
             })
             .matchHeaderSnapshot({
                 etag: anyEtag,
                 location: anyLocationFor('members')
             });
+        const newMember = body.members[0];
 
         await agent
             .post(`/members/`)
             .body({members: [member]})
             .expectStatus(422);
 
-        await assertEvents({
-            eventName: 'creating a subscription',
+        await assertMemberEvents({
             eventType: 'MemberStatusEvent',
-            quantity: 1,
-            asserts: {from_status: null, to_status: 'free'}
+            memberId: newMember.id,
+            asserts: [
+                {
+                    from_status: null,
+                    to_status: 'free'
+                }
+            ]
         });
     });
 
@@ -383,12 +365,10 @@ describe('Members API', function () {
         const member = {
             name: 'Send Me Confirmation',
             email: 'member_getting_confirmation@test.com',
-            subscribed: true
-        };
-
-        const queryParams = {
-            send_email: true,
-            email_type: 'signup'
+            newsletters: [
+                newsletters[0],
+                newsletters[1]
+            ]
         };
 
         const {body} = await agent
@@ -396,36 +376,50 @@ describe('Members API', function () {
             .body({members: [member]})
             .expectStatus(201)
             .matchBodySnapshot({
-                members: [memberMatcherNoIncludes]
+                members: [
+                    buildMemberWithoutIncludesSnapshot({
+                        newsletters: 2
+                    })
+                ]
             })
             .matchHeaderSnapshot({
                 etag: anyEtag,
                 location: anyString
             });
 
+        const newMember = body.members[0];
+
         mockManager.assert.sentEmail({
             subject: '🙌 Complete your sign up to Ghost!',
             to: 'member_getting_confirmation@test.com'
         });
 
-        await assertEvents({
-            eventName: 'creating a subscription',
+        await assertMemberEvents({
             eventType: 'MemberStatusEvent',
-            quantity: 2,
-            asserts: {
-                from_status: null,
-                to_status: 'free'
-            }
+            memberId: newMember.id,
+            asserts: [
+                {
+                    from_status: null,
+                    to_status: 'free'
+                }
+            ]
         });
 
-        await assertEvents({
-            eventName: 'creating a subscription',
+        await assertMemberEvents({
             eventType: 'MemberSubscribeEvent',
-            quantity: 1,
-            asserts: {
-                subscribed: true,
-                source: 'admin'
-            }
+            memberId: newMember.id,
+            asserts: [
+                {
+                    subscribed: true,
+                    source: 'admin',
+                    newsletter_id: newsletters[0].id
+                },
+                {
+                    subscribed: true,
+                    source: 'admin',
+                    newsletter_id: newsletters[1].id
+                }
+            ]
         });
 
         // @TODO: do we really need to delete this member here?
@@ -436,8 +430,12 @@ describe('Members API', function () {
             })
             .expectStatus(204);
 
-        const events = await models.MemberSubscribeEvent.findAll();
-        assert.equal(events.models.length, 0, 'There should be no MemberSubscribeEvent remaining.');
+        // There should be no MemberSubscribeEvent remaining.
+        await assertMemberEvents({
+            eventType: 'MemberSubscribeEvent',
+            memberId: newMember.id,
+            asserts: []
+        });
     });
 
     it('Add should fail when passing incorrect email_type query parameter', async function () {
@@ -445,6 +443,8 @@ describe('Members API', function () {
             name: 'test',
             email: 'memberTestAdd@test.com'
         };
+
+        const statusEventsBefore = await models.MemberStatusEvent.findAll();
 
         await agent
             .post(`members/?send_email=true&email_type=lel`)
@@ -460,12 +460,12 @@ describe('Members API', function () {
             });
 
         const statusEvents = await models.MemberStatusEvent.findAll();
-        assert.equal(statusEvents.models.length, 1, 'No MemberStatusEvent should have been added after failing to create a subscription.');
+        assert.equal(statusEvents.models.length, statusEventsBefore.models.length, 'No MemberStatusEvent should have been added after failing to create a subscription.');
     });
 
     // Edit a member
 
-    it('Can add complimentary subscription', async function () {
+    it('Can add complimentary subscription (out of date)', async function () {
         const stripeService = require('../../../core/server/services/stripe');
         const fakePrice = {
             id: 'price_1',
@@ -473,7 +473,7 @@ describe('Members API', function () {
             active: true,
             nickname: 'Complimentary',
             unit_amount: 0,
-            currency: 'USD',
+            currency: 'usd',
             type: 'recurring',
             recurring: {
                 interval: 'year'
@@ -506,7 +506,7 @@ describe('Members API', function () {
         const initialMember = {
             name: 'Name',
             email: 'compedtest@test.com',
-            subscribed: true
+            newsletters: [newsletters[0]]
         };
 
         const compedPayload = {
@@ -518,14 +518,7 @@ describe('Members API', function () {
             .body({members: [initialMember]})
             .expectStatus(201)
             .matchBodySnapshot({
-                members: new Array(1).fill({
-                    id: anyObjectId,
-                    uuid: anyUuid,
-                    created_at: anyISODateTime,
-                    updated_at: anyISODateTime,
-                    labels: anyArray,
-                    subscriptions: anyArray
-                })
+                members: new Array(1).fill(memberMatcherShallowIncludes)
             })
             .matchHeaderSnapshot({
                 etag: anyEtag,
@@ -539,58 +532,189 @@ describe('Members API', function () {
             .body({members: [compedPayload]})
             .expectStatus(200)
             .matchBodySnapshot({
-                members: new Array(1).fill({
-                    id: anyObjectId,
-                    uuid: anyUuid,
-                    created_at: anyISODateTime,
-                    updated_at: anyISODateTime,
-                    labels: anyArray,
-                    subscriptions: anyArray
-                })
+                members: new Array(1).fill(memberMatcherShallowIncludes)
             })
             .matchHeaderSnapshot({
                 etag: anyEtag
             });
 
-        await assertEvents({
-            eventName: 'creating a subscription',
+        await assertMemberEvents({
             eventType: 'MemberStatusEvent',
-            quantity: 2,
-            asserts: {
+            memberId: newMember.id,
+            asserts: [{
                 from_status: null,
                 to_status: 'free'
-            }
+            }]
         });
 
-        await assertEvents({
-            eventName: 'creating a subscription',
+        await assertMemberEvents({
             eventType: 'MemberSubscribeEvent',
-            quantity: 1,
-            asserts: {
+            memberId: newMember.id,
+            asserts: [{
                 subscribed: true,
-                source: 'admin'
-            }
+                source: 'admin',
+                newsletter_id: newsletters[0].id
+            }]
         });
     });
 
-    it('Can edit by id', async function () {
-        const memberToChange = {
-            name: 'change me',
-            email: 'member2Change@test.com',
-            note: 'initial note',
-            subscribed: true
-        };
-
-        const memberChanged = {
-            name: 'changed',
-            email: 'cantChangeMe@test.com',
-            note: 'edited note',
-            subscribed: false
+    it('Can add complimentary subscription by assigning a product to a member', async function () {
+        const initialMember = {
+            name: 'Name',
+            email: 'compedtest2@test.com',
+            newsletters: [newsletters[0]]
         };
 
         const {body} = await agent
             .post(`/members/`)
-            .body({members: [memberToChange]})
+            .body({members: [initialMember]})
+            .expectStatus(201);
+
+        const newMember = body.members[0];
+        assert.equal(newMember.status, 'free', 'A new member should have the free status');
+
+        const product = await getPaidProduct();
+
+        const compedPayload = {
+            id: newMember.id,
+            email: newMember.email,
+            products: [
+                {
+                    id: product.id
+                }
+            ]
+        };
+
+        const {body: body2} = await agent
+            .put(`/members/${newMember.id}/`)
+            .body({members: [compedPayload]})
+            .expectStatus(200);
+
+        const updatedMember = body2.members[0];
+        assert.equal(updatedMember.status, 'comped', 'A comped member should have the comped status');
+        assert.equal(updatedMember.products.length, 1, 'The member should have one product');
+
+        await assertMemberEvents({
+            eventType: 'MemberStatusEvent',
+            memberId: newMember.id,
+            asserts: [
+                {
+                    from_status: null,
+                    to_status: 'free'
+                },
+                {
+                    from_status: 'free',
+                    to_status: 'comped'
+                }
+            ]
+        });
+
+        await assertMemberEvents({
+            eventType: 'MemberSubscribeEvent',
+            memberId: newMember.id,
+            asserts: [{
+                subscribed: true,
+                source: 'admin',
+                newsletter_id: newsletters[0].id
+            }]
+        });
+
+        await assertMemberEvents({
+            eventType: 'MemberPaidSubscriptionEvent',
+            memberId: newMember.id,
+            asserts: []
+        });
+    });
+
+    it('Can end a complimentary subscription by removing a product from a member', async function () {
+        const product = await getPaidProduct();
+        const initialMember = {
+            name: 'Name',
+            email: 'compedtest3@test.com',
+            newsletters: [newsletters[0]],
+            products: [
+                {
+                    id: product.id
+                }
+            ]
+        };
+
+        const {body} = await agent
+            .post(`/members/`)
+            .body({members: [initialMember]})
+            .expectStatus(201);
+
+        const newMember = body.members[0];
+        assert.equal(newMember.status, 'comped', 'The new member should have the comped status');
+        assert.equal(newMember.products.length, 1, 'The member should have 1 product');
+
+        // Remove it
+        const removePayload = {
+            id: newMember.id,
+            email: newMember.email,
+            products: []
+        };
+
+        const {body: body2} = await agent
+            .put(`/members/${newMember.id}/`)
+            .body({members: [removePayload]})
+            .expectStatus(200);
+
+        const updatedMember = body2.members[0];
+        assert.equal(updatedMember.status, 'free', 'The member should have the free status');
+        assert.equal(updatedMember.products.length, 0, 'The member should have 0 products');
+
+        await assertMemberEvents({
+            eventType: 'MemberStatusEvent',
+            memberId: newMember.id,
+            asserts: [
+                {
+                    from_status: null,
+                    to_status: 'comped'
+                },
+                {
+                    from_status: 'comped',
+                    to_status: 'free'
+                }
+            ]
+        });
+
+        await assertMemberEvents({
+            eventType: 'MemberSubscribeEvent',
+            memberId: newMember.id,
+            asserts: [
+                {
+                    subscribed: true,
+                    source: 'admin',
+                    newsletter_id: newsletters[0].id
+                }
+            ]
+        });
+
+        await assertMemberEvents({
+            eventType: 'MemberPaidSubscriptionEvent',
+            memberId: newMember.id,
+            asserts: []
+        });
+    });
+
+    it('Can create a new member with a product (complementary)', async function () {
+        const product = await getPaidProduct();
+        const initialMember = {
+            name: 'Name',
+            email: 'compedtest4@test.com',
+            subscribed: true,
+            newsletters: [newsletters[0]],
+            products: [
+                {
+                    id: product.id
+                }
+            ]
+        };
+
+        const {body} = await agent
+            .post(`/members/`)
+            .body({members: [initialMember]})
             .expectStatus(201)
             .matchBodySnapshot({
                 members: new Array(1).fill({
@@ -599,7 +723,15 @@ describe('Members API', function () {
                     created_at: anyISODateTime,
                     updated_at: anyISODateTime,
                     labels: anyArray,
-                    subscriptions: anyArray
+                    subscriptions: anyArray,
+                    products: new Array(1).fill({
+                        id: anyObjectId,
+                        monthly_price_id: anyObjectId,
+                        yearly_price_id: anyObjectId,
+                        created_at: anyISODateTime,
+                        updated_at: anyISODateTime
+                    }),
+                    newsletters: new Array(1).fill(newsletterSnapshot)
                 })
             })
             .matchHeaderSnapshot({
@@ -607,31 +739,104 @@ describe('Members API', function () {
                 location: anyLocationFor('members')
             });
 
-        await assertEvents({
-            eventName: 'creating a subscription',
+        const newMember = body.members[0];
+        assert.equal(newMember.status, 'comped', 'The newly imported member should have the comped status');
+
+        await assertMemberEvents({
+            eventType: 'MemberStatusEvent',
+            memberId: newMember.id,
+            asserts: [{
+                from_status: null,
+                to_status: 'comped'
+            }]
+        });
+
+        await assertMemberEvents({
             eventType: 'MemberSubscribeEvent',
-            quantity: 2,
-            asserts: {
+            memberId: newMember.id,
+            asserts: [{
                 subscribed: true,
                 source: 'admin'
-            }
-        });
-        await assertEvents({
-            eventName: 'updating a memer',
-            eventType: 'MemberStatusEvent',
-            quantity: 3,
-            asserts: {
-                from_status: null,
-                to_status: 'free'
-            }
+            }]
         });
 
-        const newMember = body.members[0];
+        await assertMemberEvents({
+            eventType: 'MemberPaidSubscriptionEvent',
+            memberId: newMember.id,
+            asserts: []
+        });
+    });
 
-        await agent
-            .put(`/members/${newMember.id}/`)
-            .body({members: [memberChanged]})
-            .expectStatus(200)
+    it('Can create a member with an existing complimentary subscription', async function () {
+        const fakePrice = {
+            id: 'price_1',
+            product: '',
+            active: true,
+            nickname: 'Complimentary',
+            unit_amount: 0,
+            currency: 'usd',
+            type: 'recurring',
+            recurring: {
+                interval: 'year'
+            }
+        };
+
+        const fakeSubscription = {
+            id: 'sub_1',
+            customer: 'cus_1234',
+            status: 'active',
+            cancel_at_period_end: false,
+            metadata: {},
+            current_period_end: Date.now() / 1000 + 1000,
+            start_date: Date.now() / 1000,
+            plan: fakePrice,
+            items: {
+                data: [{
+                    price: fakePrice
+                }]
+            }
+        };
+
+        const fakeCustomer = {
+            id: 'cus_1234',
+            name: 'Test Member',
+            email: 'create-member-comped-test@email.com',
+            subscriptions: {
+                type: 'list',
+                data: [fakeSubscription]
+            }
+        };
+        nock('https://api.stripe.com')
+            .persist()
+            .get(/v1\/.*/)
+            .reply((uri, body) => {
+                const [match, resource, id] = uri.match(/\/?v1\/(\w+)\/?(\w+)/) || [null];
+
+                if (!match) {
+                    return [500];
+                }
+
+                if (resource === 'customers') {
+                    return [200, fakeCustomer];
+                }
+
+                if (resource === 'subscriptions') {
+                    return [200, fakeSubscription];
+                }
+            });
+
+        const initialMember = {
+            name: fakeCustomer.name,
+            email: fakeCustomer.email,
+            subscribed: true,
+            newsletters: [newsletters[0]],
+            stripe_customer_id: fakeCustomer.id
+        };
+
+        const {body} = await agent
+            .post(`/members/`)
+            .body({members: [initialMember]})
+            .expectStatus(201)
             .matchBodySnapshot({
                 members: new Array(1).fill({
                     id: anyObjectId,
@@ -639,30 +844,479 @@ describe('Members API', function () {
                     created_at: anyISODateTime,
                     updated_at: anyISODateTime,
                     labels: anyArray,
-                    subscriptions: anyArray
+                    subscriptions: anyArray,
+                    products: anyArray,
+                    newsletters: new Array(1).fill(newsletterSnapshot)
                 })
+            })
+            .matchHeaderSnapshot({
+                etag: anyEtag,
+                location: anyLocationFor('members')
+            });
+
+        const newMember = body.members[0];
+        assert.equal(newMember.status, 'comped', 'The created member should have the comped status');
+
+        await assertMemberEvents({
+            eventType: 'MemberStatusEvent',
+            memberId: newMember.id,
+            asserts: [
+                {
+                    from_status: null,
+                    to_status: 'free'
+                },
+                {
+                    from_status: 'free',
+                    to_status: 'comped'
+                }
+            ]
+        });
+
+        await assertMemberEvents({
+            eventType: 'MemberSubscribeEvent',
+            memberId: newMember.id,
+            asserts: [
+                {
+                    subscribed: true,
+                    source: 'admin'
+                }
+            ]
+        });
+
+        await assertMemberEvents({
+            eventType: 'MemberPaidSubscriptionEvent',
+            memberId: newMember.id,
+            asserts: [{
+                mrr_delta: 0
+            }]
+        });
+    });
+
+    let memberWithPaidSubscription;
+
+    it('Can create a member with an existing paid subscription', async function () {
+        const fakePrice = {
+            id: 'price_1',
+            product: 'product_1234',
+            active: true,
+            nickname: 'Paid',
+            unit_amount: 1200,
+            currency: 'usd',
+            type: 'recurring',
+            recurring: {
+                interval: 'year'
+            }
+        };
+
+        const fakeSubscription = {
+            id: 'sub_987623',
+            customer: 'cus_12345',
+            status: 'active',
+            cancel_at_period_end: false,
+            metadata: {},
+            current_period_end: Date.now() / 1000 + 1000,
+            start_date: Date.now() / 1000,
+            plan: fakePrice,
+            items: {
+                data: [{
+                    id: 'item_123',
+                    price: fakePrice
+                }]
+            }
+        };
+
+        const fakeCustomer = {
+            id: 'cus_12345',
+            name: 'Test Member',
+            email: 'create-member-paid-test@email.com',
+            subscriptions: {
+                type: 'list',
+                data: [fakeSubscription]
+            }
+        };
+        nock('https://api.stripe.com')
+            .persist()
+            .get(/v1\/.*/)
+            .reply((uri, body) => {
+                const [match, resource, id] = uri.match(/\/?v1\/(\w+)\/?(\w+)/) || [null];
+
+                if (!match) {
+                    return [500];
+                }
+
+                if (resource === 'customers') {
+                    return [200, fakeCustomer];
+                }
+
+                if (resource === 'subscriptions') {
+                    return [200, fakeSubscription];
+                }
+            });
+
+        const initialMember = {
+            name: fakeCustomer.name,
+            email: fakeCustomer.email,
+            subscribed: true,
+            newsletters: [newsletters[0]],
+            stripe_customer_id: fakeCustomer.id
+        };
+
+        const {body} = await agent
+            .post(`/members/`)
+            .body({members: [initialMember]})
+            .expectStatus(201)
+            .matchBodySnapshot({
+                members: new Array(1).fill({
+                    id: anyObjectId,
+                    uuid: anyUuid,
+                    created_at: anyISODateTime,
+                    updated_at: anyISODateTime,
+                    labels: anyArray,
+                    subscriptions: anyArray,
+                    products: anyArray,
+                    newsletters: new Array(1).fill(newsletterSnapshot)
+                })
+            })
+            .matchHeaderSnapshot({
+                etag: anyEtag,
+                location: anyLocationFor('members')
+            });
+
+        const newMember = body.members[0];
+
+        assert.equal(newMember.status, 'paid', 'The created member should have the paid status');
+        assert.equal(newMember.subscriptions.length, 1, 'The member should have a single subscription');
+        assert.equal(newMember.subscriptions[0].id, fakeSubscription.id, 'The returned subscription should have an ID assigned');
+
+        await assertMemberEvents({
+            eventType: 'MemberStatusEvent',
+            memberId: newMember.id,
+            asserts: [
+                {
+                    from_status: null,
+                    to_status: 'free'
+                }, {
+                    from_status: 'free',
+                    to_status: 'paid'
+                }
+            ]
+        });
+
+        await assertMemberEvents({
+            eventType: 'MemberSubscribeEvent',
+            memberId: newMember.id,
+            asserts: [{
+                subscribed: true,
+                source: 'admin'
+            }]
+        });
+
+        await assertMemberEvents({
+            eventType: 'MemberPaidSubscriptionEvent',
+            memberId: newMember.id,
+            asserts: [
+                {
+                    mrr_delta: 100
+                }
+            ]
+        });
+
+        await assertSubscription(fakeSubscription.id, {
+            subscription_id: fakeSubscription.id,
+            status: 'active',
+            cancel_at_period_end: false,
+            plan_amount: 1200,
+            plan_interval: 'year',
+            plan_currency: 'usd',
+            mrr: 100
+        });
+
+        // Save this member for the next test
+        memberWithPaidSubscription = newMember;
+    });
+
+    it('Returns an identical member format for read, edit and browse', async function () {
+        if (!memberWithPaidSubscription) {
+            // Previous test failed
+            this.skip();
+        }
+
+        // Check status has been updated to 'free' after cancelling
+        const {body: readBody} = await agent.get('/members/' + memberWithPaidSubscription.id + '/');
+        assert.equal(readBody.members.length, 1, 'The member was not found in read');
+        const readMember = readBody.members[0];
+
+        // Note that we explicitly need to ask to include products while browsing
+        const {body: browseBody} = await agent.get(`/members/?search=${memberWithPaidSubscription.email}&include=products`);
+        assert.equal(browseBody.members.length, 1, 'The member was not found in browse');
+        const browseMember = browseBody.members[0];
+
+        // Check for this member with a paid subscription that the body results for the patch, get and browse endpoints are 100% identical
+        should.deepEqual(browseMember, readMember, 'Browsing a member returns a different format than reading a member');
+        should.deepEqual(memberWithPaidSubscription, readMember, 'Editing a member returns a different format than reading a member');
+    });
+
+    it('Can edit by id', async function () {
+        const memberToChange = {
+            name: 'change me',
+            email: 'member2Change@test.com',
+            note: 'initial note',
+            newsletters: [
+                newsletters[0]
+            ]
+        };
+
+        const memberChanged = {
+            name: 'changed',
+            email: 'cantChangeMe@test.com',
+            note: 'edited note',
+            newsletters: []
+        };
+
+        const {body} = await agent
+            .post(`/members/`)
+            .body({members: [memberToChange]})
+            .expectStatus(201)
+            .matchBodySnapshot({
+                members: new Array(1).fill(memberMatcherShallowIncludes)
+            })
+            .matchHeaderSnapshot({
+                etag: anyEtag,
+                location: anyLocationFor('members')
+            });
+        const newMember = body.members[0];
+
+        await assertMemberEvents({
+            eventType: 'MemberSubscribeEvent',
+            memberId: newMember.id,
+            asserts: [{
+                subscribed: true,
+                source: 'admin',
+                newsletter_id: newsletters[0].id
+            }]
+        });
+        await assertMemberEvents({
+            eventType: 'MemberStatusEvent',
+            memberId: newMember.id,
+            asserts: [{
+                from_status: null,
+                to_status: 'free'
+            }]
+        });
+
+        await agent
+            .put(`/members/${newMember.id}/`)
+            .body({members: [memberChanged]})
+            .expectStatus(200)
+            .matchBodySnapshot({
+                members: new Array(1).fill(memberMatcherShallowIncludes)
             })
             .matchHeaderSnapshot({
                 etag: anyEtag
             });
 
-        await assertEvents({
-            eventName: 'updating a member email',
+        await assertMemberEvents({
             eventType: 'MemberEmailChangeEvent',
-            quantity: 1,
-            asserts: {
+            memberId: newMember.id,
+            asserts: [{
                 from_email: memberToChange.email,
                 to_email: memberChanged.email
-            }
+            }]
         });
-        await assertEvents({
-            eventName: 'removing a subscription',
+        await assertMemberEvents({
             eventType: 'MemberSubscribeEvent',
-            quantity: 3,
-            asserts: {
-                subscribed: false,
-                source: 'admin'
+            memberId: newMember.id,
+            asserts: [
+                {
+                    subscribed: true,
+                    source: 'admin',
+                    newsletter_id: newsletters[0].id
+                }, {
+                    subscribed: false,
+                    source: 'admin',
+                    newsletter_id: newsletters[0].id
+                }
+            ]
+        });
+    });
+
+    it('Can subscribe to a newsletter', async function () {
+        const clock = sinon.useFakeTimers(Date.now());
+        const memberToChange = {
+            name: 'change me',
+            email: 'member3change@test.com',
+            newsletters: [
+                newsletters[0]
+            ]
+        };
+
+        const memberChanged = {
+            newsletters: [
+                newsletters[1]
+            ]
+        };
+
+        const {body} = await agent
+            .post(`/members/`)
+            .body({members: [memberToChange]})
+            .expectStatus(201)
+            .matchBodySnapshot({
+                members: new Array(1).fill(memberMatcherShallowIncludes)
+            })
+            .matchHeaderSnapshot({
+                etag: anyEtag,
+                location: anyLocationFor('members')
+            });
+        const newMember = body.members[0];
+        const before = new Date();
+        before.setMilliseconds(0);
+
+        await assertMemberEvents({
+            eventType: 'MemberSubscribeEvent',
+            memberId: newMember.id,
+            asserts: [{
+                subscribed: true,
+                source: 'admin',
+                newsletter_id: newsletters[0].id,
+                created_at: before
+            }]
+        });
+
+        // Wait 5 second sto guarantee event ordering
+        clock.tick(5000);
+
+        const after = new Date();
+        after.setMilliseconds(0);
+       
+        await agent
+            .put(`/members/${newMember.id}/`)
+            .body({members: [memberChanged]})
+            .expectStatus(200)
+            .matchBodySnapshot({
+                members: new Array(1).fill(memberMatcherShallowIncludes)
+            })
+            .matchHeaderSnapshot({
+                etag: anyEtag
+            });
+
+        await assertMemberEvents({
+            eventType: 'MemberSubscribeEvent',
+            memberId: newMember.id,
+            asserts: [
+                {
+                    subscribed: true,
+                    source: 'admin',
+                    newsletter_id: newsletters[0].id,
+                    created_at: before
+                }, {
+                    subscribed: true,
+                    source: 'admin',
+                    newsletter_id: newsletters[1].id,
+                    created_at: after
+                }, {
+                    subscribed: false,
+                    source: 'admin',
+                    newsletter_id: newsletters[0].id,
+                    created_at: after
+                }
+            ]
+        });
+
+        clock.tick(5000);
+
+        // Check activity feed
+        const {body: eventsBody} = await agent
+            .get(`/members/events?filter=data.member_id:${newMember.id}`)
+            .body({members: [memberChanged]})
+            .expectStatus(200)
+            .matchHeaderSnapshot({
+                etag: anyEtag
+            });
+
+        const events = eventsBody.events;
+        events.should.match([
+            {
+                type: 'newsletter_event',
+                data: {
+                    subscribed: true,
+                    source: 'admin',
+                    newsletter_id: newsletters[1].id,
+                    newsletter: {
+                        id: newsletters[1].id
+                    }
+                }
+            },
+            {
+                type: 'newsletter_event',
+                data: {
+                    subscribed: false,
+                    source: 'admin',
+                    newsletter_id: newsletters[0].id,
+                    newsletter: {
+                        id: newsletters[0].id
+                    }
+                }
+            },
+            {
+                type: 'newsletter_event',
+                data: {
+                    subscribed: true,
+                    source: 'admin',
+                    newsletter_id: newsletters[0].id,
+                    newsletter: {
+                        id: newsletters[0].id
+                    }
+                }
+            },
+            {
+                type: 'signup_event'
             }
+        ]);
+
+        clock.restore();
+    });
+
+    it('Subscribes to default newsletters', async function () {
+        const filtered = newsletters.filter(n => n.get('subscribe_on_signup'));
+        filtered.length.should.be.greaterThan(0, 'There should be at least one newsletter with subscribe on signup for this test to work');
+
+        const memberToCreate = {
+            name: 'create me',
+            email: 'member2create@test.com'
+        };
+
+        const {body} = await agent
+            .post(`/members/`)
+            .body({members: [memberToCreate]})
+            .expectStatus(201)
+            .matchBodySnapshot({
+                members: new Array(1).fill(memberMatcherShallowIncludes)
+            })
+            .matchHeaderSnapshot({
+                etag: anyEtag,
+                location: anyLocationFor('members')
+            });
+
+        const newMember = body.members[0];
+        newMember.newsletters.should.match([
+            {
+                id: filtered[0].id
+            },
+            {
+                id: filtered[1].id
+            }
+        ]);
+
+        await assertMemberEvents({
+            eventType: 'MemberSubscribeEvent',
+            memberId: newMember.id,
+            asserts: filtered.map((n) => {
+                return {
+                    subscribed: true,
+                    source: 'admin',
+                    newsletter_id: n.id
+                };
+            })
         });
     });
 
@@ -728,7 +1382,36 @@ describe('Members API', function () {
                                 product_id: anyObjectId
                             }
                         }
-                    }]
+                    }],
+                    newsletters: anyArray
+                })
+            })
+            .matchHeaderSnapshot({
+                etag: anyEtag
+            });
+
+        // Check member read with a subscription
+        await agent
+            .get(`/members/${memberId}/`)
+            .expectStatus(200)
+            .matchBodySnapshot({
+                members: new Array(1).fill({
+                    id: anyObjectId,
+                    uuid: anyUuid,
+                    created_at: anyISODateTime,
+                    updated_at: anyISODateTime,
+                    labels: anyArray,
+                    subscriptions: [{
+                        start_date: anyString,
+                        current_period_end: anyString,
+                        price: {
+                            price_id: anyObjectId,
+                            product: {
+                                product_id: anyObjectId
+                            }
+                        }
+                    }],
+                    newsletters: anyArray
                 })
             })
             .matchHeaderSnapshot({
@@ -749,14 +1432,7 @@ describe('Members API', function () {
             .body({members: [member]})
             .expectStatus(201)
             .matchBodySnapshot({
-                members: new Array(1).fill({
-                    id: anyObjectId,
-                    uuid: anyUuid,
-                    created_at: anyISODateTime,
-                    updated_at: anyISODateTime,
-                    labels: anyArray,
-                    subscriptions: anyArray
-                })
+                members: new Array(1).fill(memberMatcherShallowIncludes)
             })
             .matchHeaderSnapshot({
                 etag: anyEtag,
@@ -768,7 +1444,7 @@ describe('Members API', function () {
         await agent
             .delete(`/members/${newMember.id}`)
             .expectStatus(204)
-            .matchBodySnapshot()
+            .expectEmptyBody()
             .matchHeaderSnapshot({
                 etag: anyEtag
             });
@@ -805,7 +1481,7 @@ describe('Members API', function () {
                 return [500];
             });
 
-        // TODO This is wrong because it changes the state for teh rest of the tests
+        // @TODO This is wrong because it changes the state for the rest of the tests
         // We need to add a member via a fixture and then remove them OR work out how
         // to reapply fixtures before each test
         const memberToDelete = fixtureManager.get('members', 2);
@@ -813,10 +1489,10 @@ describe('Members API', function () {
         await agent
             .delete(`members/${memberToDelete.id}/`)
             .expectStatus(204)
+            .expectEmptyBody()
             .matchHeaderSnapshot({
                 etag: anyEtag
-            })
-            .matchBodySnapshot();
+            });
 
         assert.equal(subscriptionCanceled, false, 'expected subscription not to be canceled');
     });
@@ -827,7 +1503,7 @@ describe('Members API', function () {
         const res = await agent
             .get(`/members/upload/`)
             .expectStatus(200)
-            .matchBodySnapshot()
+            .expectEmptyBody() // express-test body parsing doesn't support CSV
             .matchHeaderSnapshot({
                 etag: anyEtag,
                 'content-length': anyString, //For some reason the content-length changes between 1220 and 1317
@@ -847,7 +1523,7 @@ describe('Members API', function () {
         const res = await agent
             .get(`/members/upload/?search=Egg`)
             .expectStatus(200)
-            .matchBodySnapshot()
+            .expectEmptyBody() // express-test body parsing doesn't support CSV
             .matchHeaderSnapshot({
                 etag: anyEtag,
                 'content-disposition': anyString
@@ -890,5 +1566,360 @@ describe('Members API', function () {
                     id: anyErrorId
                 }]
             });
+    });
+
+    it('Can filter on newsletter slug', async function () {
+        await agent
+            .get('/members/?filter=newsletters:weekly-newsletter')
+            .expectStatus(200)
+            .matchBodySnapshot({
+                members: new Array(4).fill(memberMatcherShallowIncludes)
+            })
+            .matchHeaderSnapshot({
+                etag: anyEtag
+            });
+    });
+
+    // Edit a member
+    it('Can add and edit with custom newsletters', async function () {
+        // Add custom newsletter list to new member
+        const member = {
+            name: 'test newsletter',
+            email: 'memberTestAddNewsletter2@test.com',
+            note: 'test note',
+            subscribed: false,
+            labels: ['test-label'],
+            newsletters: [{id: testUtils.DataGenerator.Content.newsletters[1].id}]
+        };
+
+        const {body} = await agent
+            .post(`/members/`)
+            .body({members: [member]})
+            .expectStatus(201)
+            .matchBodySnapshot({
+                members: [{
+                    id: anyObjectId,
+                    uuid: anyUuid,
+                    created_at: anyISODateTime,
+                    updated_at: anyISODateTime,
+                    subscriptions: anyArray,
+                    labels: anyArray,
+                    newsletters: Array(1).fill(newsletterSnapshot)
+                }]
+            })
+            .matchHeaderSnapshot({
+                etag: anyEtag,
+                location: anyLocationFor('members')
+            });
+
+        const memberId = body.members[0].id;
+        const editedMember = {
+            newsletters: [{id: testUtils.DataGenerator.Content.newsletters[0].id}]
+        };
+
+        // Edit newsletter list for member
+        await agent
+            .put(`/members/${memberId}`)
+            .body({members: [editedMember]})
+            .expectStatus(200)
+            .matchBodySnapshot({
+                members: [{
+                    id: anyObjectId,
+                    uuid: anyUuid,
+                    created_at: anyISODateTime,
+                    updated_at: anyISODateTime,
+                    subscriptions: anyArray,
+                    labels: anyArray,
+                    newsletters: Array(1).fill(newsletterSnapshot)
+                }]
+            })
+            .matchHeaderSnapshot({
+                etag: anyEtag
+            });
+
+        await agent
+            .post(`/members/`)
+            .body({members: [member]})
+            .expectStatus(422);
+    });
+
+    it('Can add and send a signup confirmation email (old)', async function () {
+        const filteredNewsletters = newsletters.filter(n => n.get('subscribe_on_signup'));
+        filteredNewsletters.length.should.be.greaterThan(0, 'For this test to work, we need at least one newsletter fixture with subscribe_on_signup = true');
+
+        const member = {
+            name: 'Send Me Confirmation',
+            email: 'member_getting_confirmation_old@test.com',
+            // Mapped to subscribe_on_signup newsletters
+            subscribed: true
+        };
+
+        const {body} = await agent
+            .post('/members/?send_email=true&email_type=signup')
+            .body({members: [member]})
+            .expectStatus(201)
+            .matchBodySnapshot({
+                members: [
+                    buildMemberWithoutIncludesSnapshot({
+                        newsletters: filteredNewsletters.length
+                    })
+                ]
+            })
+            .matchHeaderSnapshot({
+                etag: anyEtag,
+                location: anyString
+            });
+
+        const newMember = body.members[0];
+
+        mockManager.assert.sentEmail({
+            subject: '🙌 Complete your sign up to Ghost!',
+            to: 'member_getting_confirmation_old@test.com'
+        });
+
+        await assertMemberEvents({
+            eventType: 'MemberStatusEvent',
+            memberId: newMember.id,
+            asserts: [
+                {
+                    from_status: null,
+                    to_status: 'free'
+                }
+            ]
+        });
+
+        await assertMemberEvents({
+            eventType: 'MemberSubscribeEvent',
+            memberId: newMember.id,
+            asserts: filteredNewsletters.map((n) => {
+                return {
+                    subscribed: true,
+                    newsletter_id: n.id,
+                    source: 'admin'
+                };
+            })
+        });
+
+        // @TODO: do we really need to delete this member here?
+        await agent
+            .delete(`members/${body.members[0].id}/`)
+            .matchHeaderSnapshot({
+                etag: anyEtag
+            })
+            .expectStatus(204);
+
+        // There should be no MemberSubscribeEvent remaining.
+        await assertMemberEvents({
+            eventType: 'MemberSubscribeEvent',
+            memberId: newMember.id,
+            asserts: []
+        });
+    });
+
+    it('Can add a member that is not subscribed (old)', async function () {
+        const filteredNewsletters = newsletters.filter(n => n.get('subscribe_on_signup'));
+        filteredNewsletters.length.should.be.greaterThan(0, 'For this test to work, we need at least one newsletter fixture with subscribe_on_signup = true');
+
+        const member = {
+            name: 'Send Me Confirmation',
+            email: 'member_getting_confirmation_old_2@test.com',
+            // Mapped to empty newsletters
+            subscribed: false
+        };
+
+        const {body} = await agent
+            .post('/members/?send_email=true&email_type=signup')
+            .body({members: [member]})
+            .expectStatus(201)
+            .matchBodySnapshot({
+                members: [
+                    buildMemberWithoutIncludesSnapshot({
+                        newsletters: 0
+                    })
+                ]
+            })
+            .matchHeaderSnapshot({
+                etag: anyEtag,
+                location: anyString
+            });
+
+        const newMember = body.members[0];
+
+        mockManager.assert.sentEmail({
+            subject: '🙌 Complete your sign up to Ghost!',
+            to: 'member_getting_confirmation_old_2@test.com'
+        });
+
+        await assertMemberEvents({
+            eventType: 'MemberStatusEvent',
+            memberId: newMember.id,
+            asserts: [
+                {
+                    from_status: null,
+                    to_status: 'free'
+                }
+            ]
+        });
+
+        await assertMemberEvents({
+            eventType: 'MemberSubscribeEvent',
+            memberId: newMember.id,
+            asserts: []
+        });
+    });
+
+    it('Can unsubscribe by setting (old) subscribed property to false', async function () {
+        const memberToChange = {
+            name: 'change me',
+            email: 'member2unsusbcribeold@test.com',
+            note: 'initial note',
+            newsletters: [
+                newsletters[0]
+            ]
+        };
+
+        const memberChanged = {
+            subscribed: false
+        };
+
+        const {body} = await agent
+            .post(`/members/`)
+            .body({members: [memberToChange]})
+            .expectStatus(201)
+            .matchBodySnapshot({
+                members: [
+                    buildMemberWithIncludesSnapshot({
+                        newsletters: 1
+                    })
+                ]
+            })
+            .matchHeaderSnapshot({
+                etag: anyEtag,
+                location: anyLocationFor('members')
+            });
+        const newMember = body.members[0];
+
+        await assertMemberEvents({
+            eventType: 'MemberSubscribeEvent',
+            memberId: newMember.id,
+            asserts: [{
+                subscribed: true,
+                source: 'admin',
+                newsletter_id: newsletters[0].id
+            }]
+        });
+        await assertMemberEvents({
+            eventType: 'MemberStatusEvent',
+            memberId: newMember.id,
+            asserts: [{
+                from_status: null,
+                to_status: 'free'
+            }]
+        });
+
+        await agent
+            .put(`/members/${newMember.id}/`)
+            .body({members: [memberChanged]})
+            .expectStatus(200)
+            .matchBodySnapshot({
+                members: [
+                    buildMemberWithIncludesSnapshot({
+                        newsletters: 0
+                    })
+                ]
+            })
+            .matchHeaderSnapshot({
+                etag: anyEtag
+            });
+
+        await assertMemberEvents({
+            eventType: 'MemberSubscribeEvent',
+            memberId: newMember.id,
+            asserts: [
+                {
+                    subscribed: true,
+                    source: 'admin',
+                    newsletter_id: newsletters[0].id
+                }, {
+                    subscribed: false,
+                    source: 'admin',
+                    newsletter_id: newsletters[0].id
+                }
+            ]
+        });
+    });
+
+    it('Can subscribe by setting (old) subscribed property to true', async function () {
+        const filteredNewsletters = newsletters.filter(n => n.get('subscribe_on_signup'));
+        filteredNewsletters.length.should.be.greaterThan(0, 'For this test to work, we need at least one newsletter fixture with subscribe_on_signup = true');
+
+        const memberToChange = {
+            name: 'change me',
+            email: 'member2subscribe@test.com',
+            note: 'initial note',
+            newsletters: []
+        };
+
+        const memberChanged = {
+            subscribed: true
+        };
+
+        const {body} = await agent
+            .post(`/members/`)
+            .body({members: [memberToChange]})
+            .expectStatus(201)
+            .matchBodySnapshot({
+                members: [
+                    buildMemberWithIncludesSnapshot({
+                        newsletters: 0
+                    })
+                ]
+            })
+            .matchHeaderSnapshot({
+                etag: anyEtag,
+                location: anyLocationFor('members')
+            });
+        const newMember = body.members[0];
+
+        await assertMemberEvents({
+            eventType: 'MemberSubscribeEvent',
+            memberId: newMember.id,
+            asserts: []
+        });
+        await assertMemberEvents({
+            eventType: 'MemberStatusEvent',
+            memberId: newMember.id,
+            asserts: [{
+                from_status: null,
+                to_status: 'free'
+            }]
+        });
+
+        await agent
+            .put(`/members/${newMember.id}/`)
+            .body({members: [memberChanged]})
+            .expectStatus(200)
+            .matchBodySnapshot({
+                members: [
+                    buildMemberWithIncludesSnapshot({
+                        newsletters: filteredNewsletters.length
+                    })
+                ]
+            })
+            .matchHeaderSnapshot({
+                etag: anyEtag
+            });
+
+        await assertMemberEvents({
+            eventType: 'MemberSubscribeEvent',
+            memberId: newMember.id,
+            asserts: filteredNewsletters.map((n) => {
+                return {
+                    subscribed: true,
+                    source: 'admin',
+                    newsletter_id: n.id
+                };
+            })
+        });
     });
 });

@@ -4,12 +4,12 @@ const tpl = require('@tryghost/tpl');
 
 const messages = {
     invalidEmailRecipientFilter: 'Invalid filter in email_recipient_filter param.',
-    invalidVisibilityFilter: 'Invalid visibility filter.'
+    invalidVisibilityFilter: 'Invalid visibility filter.',
+    invalidNewsletterId: 'The newsletter_id parameter doesn\'t match any active newsletter.'
 };
 
 class PostsService {
-    constructor({mega, apiVersion, urlUtils, models, isSet}) {
-        this.apiVersion = apiVersion;
+    constructor({mega, urlUtils, models, isSet}) {
         this.mega = mega;
         this.urlUtils = urlUtils;
         this.models = models;
@@ -18,6 +18,22 @@ class PostsService {
 
     async editPost(frame) {
         let model;
+
+        // Make sure the newsletter_id is matching an active newsletter
+        if (frame.options.newsletter_id) {
+            const newsletter = await this.models.Newsletter.findOne({id: frame.options.newsletter_id, filter: 'status:active'}, {transacting: frame.options.transacting});
+            if (!newsletter) {
+                throw new BadRequestError({
+                    message: messages.invalidNewsletterId
+                });
+            }
+        } else {
+            // Set the newsletter_id if it isn't passed to the API
+            const newsletters = await this.models.Newsletter.findPage({filter: 'status:active', limit: 1, columns: ['id']}, {transacting: frame.options.transacting});
+            if (newsletters.data.length > 0) {
+                frame.options.newsletter_id = newsletters.data[0].id;
+            }
+        }
 
         if (!frame.options.email_recipient_filter && frame.options.send_email_when_published) {
             await this.models.Base.transaction(async (transacting) => {
@@ -68,7 +84,7 @@ class PostsService {
                 let postEmail = model.relations.email;
 
                 if (!postEmail) {
-                    const email = await this.mega.addEmail(model, Object.assign({}, frame.options, {apiVersion: this.apiVersion}));
+                    const email = await this.mega.addEmail(model, Object.assign({}, frame.options));
                     model.set('email', email);
                 } else if (postEmail && postEmail.get('status') === 'failed') {
                     const email = await this.mega.retryFailedEmail(postEmail);
@@ -140,17 +156,15 @@ class PostsService {
 }
 
 /**
- * @param {string} apiVersion - API version to use within the service
  * @returns {PostsService} instance of the PostsService
  */
-const getPostServiceInstance = (apiVersion) => {
+const getPostServiceInstance = () => {
     const urlUtils = require('../../../shared/url-utils');
     const {mega} = require('../mega');
     const labs = require('../../../shared/labs');
     const models = require('../../models');
 
     return new PostsService({
-        apiVersion: apiVersion,
         mega: mega,
         urlUtils: urlUtils,
         models: models,

@@ -9,6 +9,7 @@ const settingsCache = require('../../../shared/settings-cache');
 const {formattedMemberResponse} = require('./utils');
 const labsService = require('../../../shared/labs');
 const config = require('../../../shared/config');
+const newslettersService = require('../newsletters');
 
 // @TODO: This piece of middleware actually belongs to the frontend, not to the member app
 // Need to figure a way to separate these things (e.g. frontend actually talks to members API)
@@ -68,14 +69,73 @@ const getOfferData = async function (req, res) {
     });
 };
 
+const getMemberNewsletters = async function (req, res) {
+    try {
+        const memberUuid = req.query.uuid;
+
+        if (!memberUuid) {
+            res.writeHead(400);
+            return res.end('Invalid member uuid');
+        }
+
+        const memberData = await membersService.api.members.get({
+            uuid: memberUuid
+        }, {
+            withRelated: ['newsletters']
+        });
+
+        if (!memberData) {
+            res.writeHead(404);
+            return res.end('Email address not found.');
+        }
+
+        const data = _.pick(memberData.toJSON(), 'uuid', 'email', 'name', 'newsletters', 'status');
+        return res.json(data);
+    } catch (err) {
+        res.writeHead(400);
+        res.end('Failed to unsubscribe this email address');
+    }
+};
+
+const updateMemberNewsletters = async function (req, res) {
+    try {
+        const memberUuid = req.query.uuid;
+        if (!memberUuid) {
+            res.writeHead(400);
+            return res.end('Invalid member uuid');
+        }
+
+        const data = _.pick(req.body, 'newsletters');
+        const memberData = await membersService.api.members.get({
+            uuid: memberUuid
+        });
+        if (!memberData) {
+            res.writeHead(404);
+            return res.end('Email address not found.');
+        }
+
+        const options = {
+            id: memberData.get('id'),
+            withRelated: ['newsletters']
+        };
+
+        const updatedMember = await membersService.api.members.update(data, options);
+        const updatedMemberData = _.pick(updatedMember.toJSON(), ['uuid', 'email', 'name', 'newsletters', 'status']);
+        res.json(updatedMemberData);
+    } catch (err) {
+        res.writeHead(400);
+        res.end('Failed to update newsletters');
+    }
+};
+
 const updateMemberData = async function (req, res) {
     try {
-        const data = _.pick(req.body, 'name', 'subscribed');
+        const data = _.pick(req.body, 'name', 'subscribed', 'newsletters');
         const member = await membersService.ssr.getMemberDataFromSession(req, res);
         if (member) {
             const options = {
                 id: member.id,
-                withRelated: ['stripeSubscriptions', 'stripeSubscriptions.customer', 'stripeSubscriptions.stripePrice']
+                withRelated: ['stripeSubscriptions', 'stripeSubscriptions.customer', 'stripeSubscriptions.stripePrice', 'newsletters']
             };
             const updatedMember = await membersService.api.members.update(data, options);
 
@@ -133,6 +193,16 @@ const getPortalProductPrices = async function () {
     };
 };
 
+const getSiteNewsletters = async function () {
+    try {
+        return await newslettersService.browse({filter: 'status:active', limit: 'all'});
+    } catch (err) {
+        logging.warn('Failed to fetch site newsletters');
+        logging.warn(err.message);
+        return [];
+    }
+};
+
 const getMemberSiteData = async function (req, res) {
     const isStripeConfigured = membersService.config.isStripeConnected();
     const domain = urlUtils.urlFor('home', true).match(new RegExp('^https?://([^/:?#]+)(?:[/:?#]|$)', 'i'));
@@ -144,7 +214,7 @@ const getMemberSiteData = async function (req, res) {
     }
     const {products = [], prices = []} = await getPortalProductPrices() || {};
     const portalVersion = config.get('portal:version');
-
+    const newsletters = await getSiteNewsletters();
     const response = {
         title: settingsCache.get('title'),
         description: settingsCache.get('description'),
@@ -170,6 +240,11 @@ const getMemberSiteData = async function (req, res) {
         prices,
         products
     };
+
+    if (labsService.isSet('multipleNewsletters')) {
+        response.newsletters = newsletters;
+    }
+
     if (labsService.isSet('multipleProducts')) {
         response.portal_products = settingsCache.get('portal_products');
     }
@@ -254,9 +329,11 @@ module.exports = {
     loadMemberSession,
     createSessionFromMagicLink,
     getIdentityToken,
+    getMemberNewsletters,
     getMemberData,
     getOfferData,
     updateMemberData,
+    updateMemberNewsletters,
     getMemberSiteData,
     deleteSession
 };

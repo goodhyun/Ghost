@@ -8,10 +8,6 @@ const localUtils = require('./utils');
 /* eslint-disable max-lines */
 
 module.exports = {
-    get http() {
-        return shared.http;
-    },
-
     get authentication() {
         return shared.pipeline(require('./authentication'), localUtils);
     },
@@ -78,7 +74,7 @@ module.exports = {
     },
 
     get membersStripeConnect() {
-        return shared.pipeline(require('./membersStripeConnect'), localUtils);
+        return shared.pipeline(require('./members-stripe-connect'), localUtils);
     },
 
     get members() {
@@ -98,7 +94,7 @@ module.exports = {
     },
 
     get memberSigninUrls() {
-        return shared.pipeline(require('./memberSigninUrls.js'), localUtils);
+        return shared.pipeline(require('./member-signin-urls.js'), localUtils);
     },
 
     get labels() {
@@ -125,8 +121,8 @@ module.exports = {
         return shared.pipeline(require('./users'), localUtils);
     },
 
-    get preview() {
-        return shared.pipeline(require('./preview'), localUtils);
+    get previews() {
+        return shared.pipeline(require('./previews'), localUtils);
     },
 
     get emailPost() {
@@ -153,12 +149,12 @@ module.exports = {
         return shared.pipeline(require('./actions'), localUtils);
     },
 
-    get email_preview() {
-        return shared.pipeline(require('./email-preview'), localUtils);
+    get email_previews() {
+        return shared.pipeline(require('./email-previews'), localUtils);
     },
 
     get emails() {
-        return shared.pipeline(require('./email'), localUtils);
+        return shared.pipeline(require('./emails'), localUtils);
     },
 
     get site() {
@@ -169,6 +165,10 @@ module.exports = {
         return shared.pipeline(require('./snippets'), localUtils);
     },
 
+    get stats() {
+        return shared.pipeline(require('./stats'), localUtils);
+    },
+
     get customThemeSettings() {
         return shared.pipeline(require('./custom-theme-settings'), localUtils);
     },
@@ -177,13 +177,17 @@ module.exports = {
         return require('./utils/serializers');
     },
 
+    get newsletters() {
+        return shared.pipeline(require('./newsletters'), localUtils);
+    },
+
     /**
      * Content API Controllers
      *
      * @NOTE:
      *
-     * Please create separate controllers for Content & Admin API. The goal is to expose `api.canary.content` and
-     * `api.canary.admin` soon. Need to figure out how serializers & validation works then.
+     * Please create separate controllers for Content & Admin API. The goal is to expose `api.content` and
+     * `api.admin` soon. Need to figure out how serializers & validation works then.
      */
     get pagesPublic() {
         return shared.pipeline(require('./pages-public'), localUtils, 'content');

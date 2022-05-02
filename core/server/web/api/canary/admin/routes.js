@@ -1,5 +1,6 @@
 const express = require('../../../../../shared/express');
-const api = require('../../../../api').canary;
+const api = require('../../../../api').endpoints;
+const http = require('../../../../api').shared.http;
 const apiMw = require('../../middleware');
 const mw = require('./middleware');
 
@@ -12,8 +13,6 @@ module.exports = function apiRoutes() {
     router.del = router.delete;
 
     router.use(apiMw.cors);
-
-    const http = api.http;
 
     // ## Public
     router.get('/site', mw.publicAdminApi, http(api.site.read));
@@ -113,8 +112,6 @@ module.exports = function apiRoutes() {
 
     router.get('/members/stats/count', mw.authAdminApi, http(api.members.memberStats));
     router.get('/members/stats/mrr', mw.authAdminApi, http(api.members.mrrStats));
-    router.get('/members/stats/subscribers', mw.authAdminApi, http(api.members.subscriberStats));
-    router.get('/members/stats/gross_volume', mw.authAdminApi, http(api.members.grossVolumeStats));
 
     router.get('/members/events', mw.authAdminApi, http(api.members.activityFeed));
 
@@ -138,6 +135,11 @@ module.exports = function apiRoutes() {
     router.put('/members/:id/subscriptions/:subscription_id', mw.authAdminApi, http(api.members.editSubscription));
 
     router.get('/members/:id/signin_urls', mw.authAdminApi, http(api.memberSigninUrls.read));
+
+    // ## Stats
+    router.get('/stats/member_count', mw.authAdminApi, http(api.stats.memberCountHistory));
+    router.get('/stats/mrr', mw.authAdminApi, http(api.stats.mrr));
+    router.get('/stats/subscriptions', mw.authAdminApi, http(api.stats.subscriptions));
 
     // ## Labels
     router.get('/labels', mw.authAdminApi, http(api.labels.browse));
@@ -199,10 +201,6 @@ module.exports = function apiRoutes() {
         http(api.db.backupContent)
     );
 
-    // ## Mail
-    router.post('/mail', mw.authAdminApi, http(api.mail.send));
-    router.post('/mail/test', mw.authAdminApi, http(api.mail.sendTest));
-
     // ## Slack
     router.post('/slack/test', mw.authAdminApi, http(api.slack.sendTest));
 
@@ -220,18 +218,18 @@ module.exports = function apiRoutes() {
     router.get('/identities', mw.authAdminApi, http(api.identities.read));
 
     // ## Authentication
-    router.post('/authentication/passwordreset',
+    router.post('/authentication/password_reset',
         shared.middleware.brute.globalReset,
         shared.middleware.brute.userReset,
         http(api.authentication.generateResetToken)
     );
-    router.put('/authentication/passwordreset', shared.middleware.brute.globalBlock, http(api.authentication.resetPassword));
+    router.put('/authentication/password_reset', shared.middleware.brute.globalBlock, http(api.authentication.resetPassword));
     router.post('/authentication/invitation', http(api.authentication.acceptInvitation));
     router.get('/authentication/invitation', http(api.authentication.isInvitation));
     router.post('/authentication/setup', http(api.authentication.setup));
     router.put('/authentication/setup', mw.authAdminApi, http(api.authentication.updateSetup));
     router.get('/authentication/setup', http(api.authentication.isSetup));
-    router.post('/authentication/reset_all_passwords', mw.authAdminApi, http(api.authentication.resetAllPasswords));
+    router.post('/authentication/global_password_reset', mw.authAdminApi, http(api.authentication.resetAllPasswords));
 
     // ## Images
     router.post('/images/upload',
@@ -290,8 +288,8 @@ module.exports = function apiRoutes() {
     router.get('/actions', mw.authAdminApi, http(api.actions.browse));
 
     // ## Email Preview
-    router.get('/email_preview/posts/:id', mw.authAdminApi, http(api.email_preview.read));
-    router.post('/email_preview/posts/:id', mw.authAdminApi, http(api.email_preview.sendTestEmail));
+    router.get('/email_previews/posts/:id', mw.authAdminApi, http(api.email_previews.read));
+    router.post('/email_previews/posts/:id', mw.authAdminApi, http(api.email_previews.sendTestEmail));
 
     // ## Emails
     router.get('/emails', mw.authAdminApi, http(api.emails.browse));
@@ -308,6 +306,12 @@ module.exports = function apiRoutes() {
     // ## Custom theme settings
     router.get('/custom_theme_settings', mw.authAdminApi, http(api.customThemeSettings.browse));
     router.put('/custom_theme_settings', mw.authAdminApi, http(api.customThemeSettings.edit));
+
+    router.get('/newsletters', mw.authAdminApi, http(api.newsletters.browse));
+    router.get('/newsletters/:id', mw.authAdminApi, http(api.newsletters.read));
+    router.post('/newsletters', mw.authAdminApi, http(api.newsletters.add));
+    router.put('/newsletters/verifications/', mw.authAdminApi, http(api.newsletters.verifyPropertyUpdate));
+    router.put('/newsletters/:id', mw.authAdminApi, http(api.newsletters.edit));
 
     return router;
 };

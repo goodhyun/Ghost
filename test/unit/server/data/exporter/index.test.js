@@ -1,10 +1,9 @@
 const should = require('should');
 const sinon = require('sinon');
-const rewire = require('rewire');
 const Promise = require('bluebird');
 const errors = require('@tryghost/errors');
 const db = require('../../../../../core/server/data/db');
-const exporter = rewire('../../../../../core/server/data/exporter');
+const exporter = require('../../../../../core/server/data/exporter');
 const schema = require('../../../../../core/server/data/schema');
 const models = require('../../../../../core/server/models');
 const schemaTables = Object.keys(schema.tables);
@@ -167,7 +166,7 @@ describe('Exporter', function () {
         });
     });
 
-    describe('Export table whitelists', function () {
+    describe('Export table allowlists', function () {
         it('should be fixed when db schema introduces new tables', function () {
             const {
                 BACKUP_TABLES,
@@ -199,7 +198,7 @@ describe('Exporter', function () {
 
             // NOTE: if default settings changed either modify the settings keys blocklist or increase allowedKeysLength
             //       This is a reminder to think about the importer/exporter scenarios ;)
-            const allowedKeysLength = 85;
+            const allowedKeysLength = 86;
             totalKeysLength.should.eql(SETTING_KEYS_BLOCKLIST.length + allowedKeysLength);
         });
     });

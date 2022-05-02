@@ -42,7 +42,7 @@ describe('Authentication API', function () {
             const requestMock = nock('https://api.github.com')
                 .get('/repos/tryghost/dawn/zipball')
                 .query(true)
-                .replyWithFile(200, __dirname + '/../../../utils/fixtures/themes/valid.zip');
+                .replyWithFile(200, fixtureManager.getPathForFixture('themes/valid.zip'));
 
             await agent
                 .post('authentication/setup')
@@ -93,10 +93,19 @@ describe('Authentication API', function () {
 
             // Test that the default Tier has been renamed from 'Default Product'
             const {body} = await agent.get('/tiers/');
-
             const tierWithDefaultProductName = body.tiers.find(x => x.name === 'Default Product');
 
             assert(tierWithDefaultProductName === undefined, 'The default Tier should have had a name change');
+
+            // Test that the default Newsletter has name and sender name changed to blog title
+            const {body: newsletterBody} = await agent.get('/newsletters/');
+            const defaultNewsletter = newsletterBody.newsletters.find(x => x.slug === 'default-newsletter');
+            const newsletterWithDefaultName = newsletterBody.newsletters.find(x => x.name
+                === 'Default Newsletter');
+
+            assert (defaultNewsletter.name === 'a test blog', 'The default newsletter should have had a name change');
+
+            assert(newsletterWithDefaultName === undefined, 'The default newsletter should have had a name change');
         });
 
         it('is setup? yes', async function () {
@@ -166,7 +175,7 @@ describe('Authentication API', function () {
             const requestMock = nock('https://api.github.com')
                 .get('/repos/tryghost/casper/zipball')
                 .query(true)
-                .replyWithFile(200, __dirname + '/../../../utils/fixtures/themes/valid.zip');
+                .replyWithFile(200, fixtureManager.getPathForFixture('themes/valid.zip'));
 
             await cleanAgent
                 .post('authentication/setup')
@@ -338,10 +347,10 @@ describe('Authentication API', function () {
                 password: ownerUser.get('password')
             });
 
-            await agent.put('authentication/passwordreset')
+            await agent.put('authentication/password_reset')
                 .header('Accept', 'application/json')
                 .body({
-                    passwordreset: [{
+                    password_reset: [{
                         token: token,
                         newPassword: 'thisissupersafe',
                         ne2Password: 'thisissupersafe'
@@ -356,10 +365,10 @@ describe('Authentication API', function () {
 
         it('reset password: invalid token', async function () {
             await agent
-                .put('authentication/passwordreset')
+                .put('authentication/password_reset')
                 .header('Accept', 'application/json')
                 .body({
-                    passwordreset: [{
+                    password_reset: [{
                         token: 'invalid',
                         newPassword: 'thisissupersafe',
                         ne2Password: 'thisissupersafe'
@@ -388,10 +397,10 @@ describe('Authentication API', function () {
             });
 
             await agent
-                .put('authentication/passwordreset')
+                .put('authentication/password_reset')
                 .header('Accept', 'application/json')
                 .body({
-                    passwordreset: [{
+                    password_reset: [{
                         token: token,
                         newPassword: 'thisissupersafe',
                         ne2Password: 'thisissupersafe'
@@ -417,10 +426,10 @@ describe('Authentication API', function () {
             });
 
             await agent
-                .put('authentication/passwordreset')
+                .put('authentication/password_reset')
                 .header('Accept', 'application/json')
                 .body({
-                    passwordreset: [{
+                    password_reset: [{
                         token: token,
                         newPassword: 'thisissupersafe',
                         ne2Password: 'thisissupersafe'
@@ -439,10 +448,10 @@ describe('Authentication API', function () {
 
         it('reset password: generate reset token', async function () {
             await agent
-                .post('authentication/passwordreset')
+                .post('authentication/password_reset')
                 .header('Accept', 'application/json')
                 .body({
-                    passwordreset: [{
+                    password_reset: [{
                         email: email
                     }]
                 })
@@ -469,12 +478,12 @@ describe('Authentication API', function () {
             mockManager.restore();
         });
 
-        it('reset all passwords returns 200', async function () {
-            await agent.post('authentication/reset_all_passwords')
+        it('reset all passwords returns 204', async function () {
+            await agent.post('authentication/global_password_reset')
                 .header('Accept', 'application/json')
                 .body({})
-                .expectStatus(200)
-                .matchBodySnapshot()
+                .expectStatus(204)
+                .expectEmptyBody()
                 .matchHeaderSnapshot({
                     etag: anyEtag
                 });

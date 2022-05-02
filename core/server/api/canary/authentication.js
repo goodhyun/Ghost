@@ -51,14 +51,14 @@ module.exports = {
                 })
                 .then((data) => {
                     try {
-                        return auth.setup.doFixtures(data, api.products);
+                        return auth.setup.doFixtures(data);
                     } catch (e) {
                         return data;
                     }
                 })
                 .then((data) => {
                     try {
-                        return auth.setup.doProduct(data, api.products);
+                        return auth.setup.doProductAndNewsletter(data, api);
                     } catch (e) {
                         return data;
                     }
@@ -129,7 +129,7 @@ module.exports = {
 
     generateResetToken: {
         validation: {
-            docName: 'passwordreset'
+            docName: 'password_reset'
         },
         permissions: true,
         options: [
@@ -141,7 +141,7 @@ module.exports = {
                     return auth.setup.assertSetupCompleted(true)();
                 })
                 .then(() => {
-                    return auth.passwordreset.generateToken(frame.data.passwordreset[0].email, api.settings);
+                    return auth.passwordreset.generateToken(frame.data.password_reset[0].email, api.settings);
                 })
                 .then((token) => {
                     return auth.passwordreset.sendResetNotification(token, api.mail);
@@ -151,7 +151,7 @@ module.exports = {
 
     resetPassword: {
         validation: {
-            docName: 'passwordreset',
+            docName: 'password_reset',
             data: {
                 newPassword: {required: true},
                 ne2Password: {required: true}
@@ -221,6 +221,7 @@ module.exports = {
     },
 
     resetAllPasswords: {
+        statusCode: 204,
         permissions: true,
         async query(frame) {
             await userService.resetAllPasswords(frame.options);

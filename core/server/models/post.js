@@ -566,7 +566,7 @@ Post = ghostBookshelf.Model.extend({
                 if (!tag.id && !tag.tag_id && tag.slug) {
                     // Clean up the provided slugs before we do any matching with existing tags
                     tag.slug = await ghostBookshelf.Model.generateSlug(
-                        Tag, 
+                        Tag,
                         tag.slug,
                         {skipDuplicateChecks: true}
                     );
@@ -711,6 +711,14 @@ Post = ghostBookshelf.Model.extend({
             }
         }
 
+        // newsletter_id is read-only and should only be set using a query param when publishing/scheduling
+        if (options.newsletter_id
+            && !this.get('newsletter_id')
+            && this.hasChanged('status')
+            && (newStatus === 'published' || newStatus === 'scheduled')) {
+            this.set('newsletter_id', options.newsletter_id);
+        }
+
         // email_recipient_filter is read-only and should only be set using a query param when publishing/scheduling
         if (options.email_recipient_filter
             && (options.email_recipient_filter !== 'none')
@@ -725,6 +733,7 @@ Post = ghostBookshelf.Model.extend({
                 return self.related('email').fetch({transacting: options.transacting}).then((email) => {
                     if (!email) {
                         self.set('email_recipient_filter', 'none');
+                        self.set('newsletter_id', null);
                     }
                 });
             });
@@ -854,6 +863,10 @@ Post = ghostBookshelf.Model.extend({
 
     email: function email() {
         return this.hasOne('Email', 'post_id');
+    },
+
+    newsletter: function newsletter() {
+        return this.belongsTo('Newsletter', 'newsletter_id');
     },
 
     /**
@@ -1046,14 +1059,14 @@ Post = ghostBookshelf.Model.extend({
     permittedOptions: function permittedOptions(methodName) {
         let options = ghostBookshelf.Model.permittedOptions.call(this, methodName);
 
-        // whitelists for the `options` hash argument on methods, by method name.
+        // allowlists for the `options` hash argument on methods, by method name.
         // these are the only options that can be passed to Bookshelf / Knex.
         const validOptions = {
             findOne: ['columns', 'importing', 'withRelated', 'require', 'filter'],
             findPage: ['status'],
             findAll: ['columns', 'filter'],
             destroy: ['destroyAll', 'destroyBy'],
-            edit: ['filter', 'email_recipient_filter', 'force_rerender']
+            edit: ['filter', 'email_recipient_filter', 'force_rerender', 'newsletter_id']
         };
 
         // The post model additionally supports having a formats option

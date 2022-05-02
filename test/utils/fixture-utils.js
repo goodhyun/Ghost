@@ -457,7 +457,15 @@ const fixtures = {
         });
     },
 
-    insertMembersAndLabelsAndProducts: function insertMembersAndLabelsAndProducts() {
+    insertArchivedTiers: function insertArchivedTiers() {
+        let archivedProduct = DataGenerator.forKnex.createProduct({
+            active: false
+        });
+
+        return models.Product.add(archivedProduct, context.internal);
+    },
+
+    insertMembersAndLabelsAndProducts: function insertMembersAndLabelsAndProducts(newsletters = false) {
         return Promise.map(DataGenerator.forKnex.labels, function (label) {
             return models.Label.add(label, context.internal);
         }).then(function () {
@@ -495,6 +503,15 @@ const fixtures = {
                     });
 
                     member.labels = memberLabelRelations;
+
+                    if (newsletters) {
+                        let memberNewsletterRelations = _.filter(DataGenerator.forKnex.members_newsletters, {member_id: member.id});
+                        memberNewsletterRelations = _.map(memberNewsletterRelations, function (memberNewsletterRelation) {
+                            return _.find(DataGenerator.forKnex.newsletters, {id: memberNewsletterRelation.newsletter_id});
+                        });
+
+                        member.newsletters = memberNewsletterRelations;
+                    }
 
                     // TODO: replace with full member/product associations
                     if (member.email === 'with-product@test.com') {
@@ -545,6 +562,10 @@ const fixtures = {
                     })}, {id: member.id});
                 }
             }
+        }).then(async function () {
+            for (const event of DataGenerator.forKnex.members_paid_subscription_events) {
+                await models.MemberPaidSubscriptionEvent.add(event);
+            }
         });
     },
 
@@ -566,6 +587,12 @@ const fixtures = {
             };
 
             return emailAnalyticsService.aggregateStats(toAggregate);
+        });
+    },
+
+    insertNewsletters: async function insertNewsletters() {
+        return Promise.map(DataGenerator.forKnex.newsletters, function (newsletter) {
+            return models.Newsletter.add(newsletter, context.internal);
         });
     },
 
@@ -620,7 +647,13 @@ const toDoList = {
         return fixtures.insertOne('Member', 'members', 'createMember');
     },
     members: function insertMembersAndLabelsAndProducts() {
-        return fixtures.insertMembersAndLabelsAndProducts();
+        return fixtures.insertMembersAndLabelsAndProducts(false);
+    },
+    newsletters: function insertNewsletters() {
+        return fixtures.insertNewsletters();
+    },
+    'members:newsletters': function insertMembersAndLabelsAndProductsAndNewsletters() {
+        return fixtures.insertMembersAndLabelsAndProducts(true);
     },
     'members:emails': function insertEmailsAndRecipients() {
         return fixtures.insertEmailsAndRecipients();
@@ -693,6 +726,9 @@ const toDoList = {
     },
     custom_theme_settings: function insertCustomThemeSettings() {
         return fixtures.insertCustomThemeSettings();
+    },
+    'tiers:archived': function insertArchivedTiers() {
+        return fixtures.insertArchivedTiers();
     }
 };
 

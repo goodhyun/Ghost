@@ -1,7 +1,7 @@
 //@ts-check
 const debug = require('@tryghost/debug')('api:canary:utils:serializers:output:members');
 const {unparse} = require('@tryghost/members-csv');
-const labs = require('../../../../../../shared/labs');
+const labsService = require('../../../../../../shared/labs');
 
 module.exports = {
     hasActiveStripeSubscriptions: createSerializer('hasActiveStripeSubscriptions', passthrough),
@@ -10,6 +10,8 @@ module.exports = {
     read: createSerializer('read', singleMember),
     edit: createSerializer('edit', singleMember),
     add: createSerializer('add', singleMember),
+    destroy: createSerializer('destroy', passthrough),
+
     editSubscription: createSerializer('editSubscription', singleMember),
     createSubscription: createSerializer('createSubscription', singleMember),
     bulkDestroy: createSerializer('bulkDestroy', passthrough),
@@ -17,11 +19,8 @@ module.exports = {
     exportCSV: createSerializer('exportCSV', exportCSV),
 
     importCSV: createSerializer('importCSV', passthrough),
-    stats: createSerializer('stats', passthrough),
     memberStats: createSerializer('memberStats', passthrough),
     mrrStats: createSerializer('mrrStats', passthrough),
-    subscriberStats: createSerializer('subscriberStats', passthrough),
-    grossVolumeStats: createSerializer('grossVolumeStats', passthrough),
     activityFeed: createSerializer('activityFeed', passthrough)
 };
 
@@ -125,15 +124,27 @@ function serializeMember(member, options) {
         email_opened_count: json.email_opened_count,
         email_open_rate: json.email_open_rate,
         email_recipients: json.email_recipients,
-        status: json.status
+        status: json.status,
+        last_seen_at: json.last_seen_at
     };
-
-    if (labs.isSet('membersLastSeenFilter')) {
-        serialized.last_seen_at = json.last_seen_at;
-    }
 
     if (json.products) {
         serialized.products = json.products;
+    }
+
+    if (labsService.isSet('multipleNewsletters')) {
+        if (json.newsletters) {
+            serialized.newsletters = json.newsletters
+                .filter(newsletter => newsletter.status === 'active')
+                .sort((a, b) => {
+                    return a.sort_order - b.sort_order;
+                });
+        }
+        // override the `subscribed` param to mean "subscribed to any active newsletter"
+        serialized.subscribed = false;
+        if (serialized.newsletters.length > 0) {
+            serialized.subscribed = true;
+        }
     }
 
     return serialized;

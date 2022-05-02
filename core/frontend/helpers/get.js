@@ -2,7 +2,7 @@
 // Usage: `{{#get "posts" limit="5"}}`, `{{#get "tags" limit="all"}}`
 // Fetches data from the API
 const {config, api, prepareContextResource} = require('../services/proxy');
-const {hbs} = require('../services/rendering');
+const {hbs} = require('../services/handlebars');
 
 const logging = require('@tryghost/logging');
 const errors = require('@tryghost/errors');
@@ -80,7 +80,7 @@ function resolvePaths(globals, data, value) {
         path = path.replace(/\.\[/g, '[');
 
         if (path.charAt(0) === '@') {
-            result = jsonpath.query(globals, path.substr(1));
+            result = jsonpath.query(globals, path.slice(1));
         } else {
             // Do the query, which always returns an array of matches
             result = jsonpath.query(data, path);
@@ -134,7 +134,7 @@ module.exports = function get(resource, options) {
     const start = Date.now();
     const data = createFrame(options.data);
     const ghostGlobals = _.omit(data, ['_parent', 'root']);
-    const apiVersion = _.get(data, 'root._locals.apiVersion');
+
     let apiOptions = options.hash;
     let returnedRowsCount;
 
@@ -151,7 +151,7 @@ module.exports = function get(resource, options) {
     }
 
     const controllerName = RESOURCES[resource].alias;
-    const controller = api[apiVersion][controllerName];
+    const controller = api[controllerName];
     const action = isBrowse(apiOptions) ? 'browse' : 'read';
 
     // Parse the options we're going to pass to the API
@@ -194,7 +194,7 @@ module.exports = function get(resource, options) {
                 message: `{{#get}} helper took ${totalMs}ms to complete`,
                 code: 'SLOW_GET_HELPER',
                 errorDetails: {
-                    api: `${apiVersion}.${controllerName}.${action}`,
+                    api: `${controllerName}.${action}`,
                     apiOptions,
                     returnedRows: returnedRowsCount
                 }

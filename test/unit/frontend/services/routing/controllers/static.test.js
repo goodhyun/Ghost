@@ -1,10 +1,9 @@
 const should = require('should');
 const sinon = require('sinon');
-const testUtils = require('../../../../../utils');
-const API_VERSION = 'canary';
-const api = require('../../../../../../core/server/api')[API_VERSION];
+
+const api = require('../../../../../../core/frontend/services/proxy').api;
 const themeEngine = require('../../../../../../core/frontend/services/theme-engine');
-const helpers = require('../../../../../../core/frontend/services/routing/helpers');
+const renderer = require('../../../../../../core/frontend/services/rendering');
 const controllers = require('../../../../../../core/frontend/services/routing/controllers');
 
 function failTest(done) {
@@ -40,11 +39,11 @@ describe('Unit - services/routing/controllers/static', function () {
             };
         });
 
-        sinon.stub(helpers, 'secure').get(function () {
+        sinon.stub(renderer, 'secure').get(function () {
             return secureStub;
         });
 
-        sinon.stub(helpers, 'handleError').get(function () {
+        sinon.stub(renderer, 'handleError').get(function () {
             return handleErrorStub;
         });
 
@@ -56,11 +55,11 @@ describe('Unit - services/routing/controllers/static', function () {
             }
         });
 
-        sinon.stub(helpers, 'renderer').get(function () {
+        sinon.stub(renderer, 'renderer').get(function () {
             return renderStub;
         });
 
-        sinon.stub(helpers, 'formatResponse').get(function () {
+        sinon.stub(renderer, 'formatResponse').get(function () {
             return formatResponseStub;
         });
 
@@ -74,9 +73,7 @@ describe('Unit - services/routing/controllers/static', function () {
             routerOptions: {},
             render: sinon.spy(),
             redirect: sinon.spy(),
-            locals: {
-                apiVersion: API_VERSION
-            }
+            locals: {}
         };
     });
 
@@ -85,10 +82,10 @@ describe('Unit - services/routing/controllers/static', function () {
     });
 
     it('no extra data to fetch', function (done) {
-        helpers.renderer.callsFake(function () {
-            helpers.formatResponse.entries.calledOnce.should.be.true();
+        renderer.renderer.callsFake(function () {
+            renderer.formatResponse.entries.calledOnce.should.be.true();
             tagsReadStub.called.should.be.false();
-            helpers.secure.called.should.be.false();
+            renderer.secure.called.should.be.false();
             done();
         });
 
@@ -109,10 +106,10 @@ describe('Unit - services/routing/controllers/static', function () {
 
         tagsReadStub = sinon.stub().resolves({tags: [{slug: 'bacon'}]});
 
-        helpers.renderer.callsFake(function () {
+        renderer.renderer.callsFake(function () {
             tagsReadStub.called.should.be.true();
-            helpers.formatResponse.entries.calledOnce.should.be.true();
-            helpers.secure.calledOnce.should.be.true();
+            renderer.formatResponse.entries.calledOnce.should.be.true();
+            renderer.secure.calledOnce.should.be.true();
             done();
         });
 

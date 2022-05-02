@@ -15,9 +15,7 @@ const ignoredSettings = ['slack_url', 'members_from_address', 'members_support_a
 // NOTE: drop support in Ghost 5.0
 const deprecatedSupportedSettingsMap = {
     default_locale: 'lang',
-    active_timezone: 'timezone',
-    ghost_head: 'codeinjection_head',
-    ghost_foot: 'codeinjection_foot'
+    active_timezone: 'timezone'
 };
 const deprecatedSupportedSettingsOneToManyMap = {
     // NOTE: intentionally ignoring slack_url setting
@@ -80,9 +78,6 @@ class SettingsImporter extends BaseImporter {
         };
     }
 
-    /**
-     * - 'core' and 'theme' are blacklisted
-     */
     beforeImport() {
         debug('beforeImport');
 

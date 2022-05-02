@@ -197,9 +197,7 @@ module.exports = {
                     }
                 });
             }
-            let model = await membersService.api.members.get({id: frame.options.id}, {
-                withRelated: ['labels', 'products', 'stripeSubscriptions', 'stripeSubscriptions.customer', 'stripeSubscriptions.stripePrice', 'stripeSubscriptions.stripePrice.stripeProduct']
-            });
+            let model = await membersService.api.memberBREADService.read({id: frame.options.id});
             if (!model) {
                 throw new errors.NotFoundError({
                     message: tpl(messages.memberNotFound)
@@ -241,9 +239,7 @@ module.exports = {
                     stripe_price_id: frame.data.stripe_price_id
                 }
             });
-            let model = await membersService.api.members.get({id: frame.options.id}, {
-                withRelated: ['labels', 'products', 'stripeSubscriptions', 'stripeSubscriptions.customer', 'stripeSubscriptions.stripePrice', 'stripeSubscriptions.stripePrice.stripeProduct']
-            });
+            let model = await membersService.api.memberBREADService.read({id: frame.options.id});
             if (!model) {
                 throw new errors.NotFoundError({
                     message: tpl(messages.memberNotFound)
@@ -370,6 +366,9 @@ module.exports = {
             if (labsService.isSet('multipleProducts')) {
                 frame.options.withRelated.push('products');
             }
+            if (labsService.isSet('multipleNewsletters')) {
+                frame.options.withRelated.push('newsletters');
+            }
             const page = await membersService.api.members.list(frame.options);
 
             return page;
@@ -453,51 +452,6 @@ module.exports = {
             return {
                 resource: 'mrr',
                 data: mrrStats
-            };
-        }
-    },
-    subscriberStats: {
-        permissions: {
-            method: 'browse'
-        },
-        async query() {
-            const statsData = await membersService.api.events.getSubscriptions();
-            const totalSubscriptions = (_.last(statsData) && _.last(statsData).subscribed) || 0;
-            statsData.forEach((d) => {
-                d.date = moment(d.date).format('YYYY-MM-DD');
-            });
-            return {
-                resource: 'subscribers',
-                total: totalSubscriptions,
-                data: statsData.map((d) => {
-                    return Object.assign({}, {
-                        date: moment(d.date).format('YYYY-MM-DD'),
-                        value: d.subscribed
-                    });
-                })
-            };
-        }
-    },
-    grossVolumeStats: {
-        permissions: {
-            method: 'browse'
-        },
-        async query() {
-            const volumeData = await membersService.api.events.getVolume();
-            const volumeStats = Object.keys(volumeData).map((curr) => {
-                return {
-                    currency: curr,
-                    data: volumeData[curr].map((d) => {
-                        return Object.assign({}, {
-                            date: moment(d.date).format('YYYY-MM-DD'),
-                            value: d.volume
-                        });
-                    })
-                };
-            });
-            return {
-                resource: 'gross-volume',
-                data: volumeStats
             };
         }
     },

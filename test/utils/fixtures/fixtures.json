@@ -20,6 +20,15 @@
             ]
         },
         {
+            "name": "Newsletter",
+            "entries": [
+                {
+                    "name":             "Default Newsletter",
+                    "slug":             "default-newsletter"
+                }
+            ]
+        },
+        {
             "name": "Tag",
             "entries": [
                 {
@@ -97,6 +106,11 @@
                     "name": "Browse notifications",
                     "action_type": "browse",
                     "object_type": "notification"
+                },
+                {
+                    "name": "Read newsletters",
+                    "action_type": "read",
+                    "object_type": "newsletter"
                 },
                 {
                     "name": "Add notifications",
@@ -532,6 +546,21 @@
                     "name": "Edit custom theme settings",
                     "action_type": "edit",
                     "object_type": "custom_theme_setting"
+                },
+                {
+                    "name": "Browse newsletters",
+                    "action_type": "browse",
+                    "object_type": "newsletter"
+                },
+                {
+                    "name": "Add newsletters",
+                    "action_type": "add",
+                    "object_type": "newsletter"
+                },
+                {
+                    "name": "Edit newsletters",
+                    "action_type": "edit",
+                    "object_type": "newsletter"
                 }
             ]
         },
@@ -792,7 +821,8 @@
                     "custom_theme_setting": "all",
                     "offer": "all",
                     "authentication": "resetAllPasswords",
-                    "members_stripe_connect": "auth"
+                    "members_stripe_connect": "auth",
+                    "newsletter": "all"
                 },
                 "DB Backup Integration": {
                     "db": "all"

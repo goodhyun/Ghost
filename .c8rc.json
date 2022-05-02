@@ -6,10 +6,10 @@
     "text-summary",
     "cobertura"
   ],
-  "statements": 56,
+  "statements": 57,
   "branches": 85,
-  "functions": 51,
-  "lines": 56,
+  "functions": 53,
+  "lines": 57,
   "include": [
     "core/{*.js,frontend,server,shared}"
   ],
@@ -26,8 +26,6 @@
     "!core/server/web/parent/middleware/**",
     "core/server/web/shared/**",
     "!core/server/web/shared/middleware/**",
-    "core/server/api/v2/**",
-    "core/server/api/v3/**",
     "core/server/api/canary/**",
     "!core/server/api/canary/utils"
   ]

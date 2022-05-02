@@ -66,6 +66,36 @@ function dropTables(names) {
 }
 
 /**
+ * Creates a migration which will drop an existing table and then re-add a new table based on provided spec
+ * @param {string} name - table name
+ * @param {Object} tableSpec - copy of table schema definition as defined in schema.js at the moment of writing the migration,
+ * this parameter MUST be present, otherwise @daniellockyer will hunt you down
+ *
+ * @returns {Object} migration object returning config/up/down properties
+ */
+function recreateTable(name, tableSpec) {
+    return createNonTransactionalMigration(
+        async function up(connection) {
+            const exists = await connection.schema.hasTable(name);
+
+            if (!exists) {
+                logging.warn(`Failed to drop table: ${name} - table does not exist`);
+            } else {
+                logging.info(`Dropping table: ${name}`);
+                await commands.deleteTable(name, connection);
+                logging.info(`Re-adding table: ${name}`);
+                await commands.createTable(name, connection, tableSpec);
+            }
+        },
+        async function down() {
+            // noop: we cannot go back to old table schema
+            logging.warn(`Ignoring rollback for table recreate: ${name}`);
+            return Promise.resolve();
+        }
+    );
+}
+
+/**
  * Creates a migration which will add a permission to the database
  *
  * @param {Object} config
@@ -178,7 +208,7 @@ function addPermissionToRole(config) {
                 return;
             }
 
-            logging.warn(`Adding permission(${config.permission}) to role(${config.role})`);
+            logging.info(`Adding permission(${config.permission}) to role(${config.role})`);
             await connection('permissions_roles').insert({
                 id: ObjectId().toHexString(),
                 permission_id: permission.id,
@@ -375,7 +405,8 @@ function createAddColumnMigration(table, column, columnDefinition) {
             column,
             dbIsInCorrectState: hasColumn => hasColumn === false,
             operation: commands.dropColumn,
-            operationVerb: 'Removing'
+            operationVerb: 'Removing',
+            columnDefinition
         })
     );
 }
@@ -406,6 +437,44 @@ function createDropColumnMigration(table, column, columnDefinition) {
             operationVerb: 'Adding',
             columnDefinition
         })
+    );
+}
+
+/**
+ * @param {string} table
+ * @param {string} column
+ *
+ * @returns {Migration}
+ */
+function createSetNullableMigration(table, column) {
+    return createNonTransactionalMigration(
+        async function up(knex) {
+            logging.info(`Setting nullable: ${table}.${column}`);
+            await commands.setNullable(table, column, knex);
+        },
+        async function down(knex) {
+            logging.info(`Dropping nullable:  ${table}.${column}`);
+            await commands.dropNullable(table, column, knex);
+        }
+    );
+}
+
+/**
+ * @param {string} table
+ * @param {string} column
+ *
+ * @returns {Migration}
+ */
+function createDropNullableMigration(table, column) {
+    return createNonTransactionalMigration(
+        async function up(knex) {
+            logging.info(`Dropping nullable: ${table}.${column}`);
+            await commands.dropNullable(table, column, knex);
+        },
+        async function down(knex) {
+            logging.info(`Setting nullable: ${table}.${column}`);
+            await commands.setNullable(table, column, knex);
+        }
     );
 }
 
@@ -459,13 +528,32 @@ function addSetting({key, value, type, group}) {
     );
 }
 
+/**
+ * @param {number} major
+ */
+function createFinalMigration(major) {
+    return createTransactionalMigration(
+        async function up() {
+            throw new errors.InternalServerError({
+                message: `Unable to run migrations`,
+                context: `You must be on the latest v${major}.x to update across major versions - https://ghost.org/docs/update/`,
+                help: `Run 'ghost update v${major}' to get the latest v${major}.x version, then run 'ghost update' to get to the latest.`
+            });
+        },
+        async function down() {
+            // no-op
+        });
+}
+
 module.exports = {
     addTable,
     dropTables,
+    recreateTable,
     addPermission,
     addPermissionToRole,
     addPermissionWithRoles,
     addSetting,
+    createFinalMigration,
     createTransactionalMigration,
     createNonTransactionalMigration,
     createIrreversibleMigration,
@@ -473,6 +561,8 @@ module.exports = {
     combineNonTransactionalMigrations,
     createAddColumnMigration,
     createDropColumnMigration,
+    createSetNullableMigration,
+    createDropNullableMigration,
     meta: {
         MIGRATION_USER
     }

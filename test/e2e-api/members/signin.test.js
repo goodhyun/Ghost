@@ -1,19 +1,18 @@
-const membersService = require('../../../core/server/services/members');
 const {agentProvider, mockManager, fixtureManager} = require('../../utils/e2e-framework');
 
-let membersAgent;
+let membersAgent, membersService;
 
 describe('Members Signin', function () {
     before(async function () {
         const agents = await agentProvider.getAgentsForMembers();
         membersAgent = agents.membersAgent;
 
+        membersService = require('../../../core/server/services/members');
+
         await fixtureManager.init('members');
     });
 
     beforeEach(function () {
-        mockManager.mockLabsEnabled('multipleProducts');
-        mockManager.mockLabsEnabled('tierWelcomePages');
         mockManager.mockStripe();
     });
 

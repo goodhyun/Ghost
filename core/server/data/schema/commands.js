@@ -59,13 +59,30 @@ function addTableColumn(tableName, table, columnName, columnSpec = schema[tableN
     }
 }
 
+function setNullable(tableName, column, transaction = db.knex) {
+    return transaction.schema.table(tableName, function (table) {
+        table.setNullable(column);
+    });
+}
+
+function dropNullable(tableName, column, transaction = db.knex) {
+    return transaction.schema.table(tableName, function (table) {
+        table.dropNullable(column);
+    });
+}
+
 function addColumn(tableName, column, transaction = db.knex, columnSpec) {
     return transaction.schema.table(tableName, function (table) {
         addTableColumn(tableName, table, column, columnSpec);
     });
 }
 
-function dropColumn(tableName, column, transaction = db.knex) {
+async function dropColumn(tableName, column, transaction = db.knex, columnSpec = {}) {
+    if (Object.prototype.hasOwnProperty.call(columnSpec, 'references')) {
+        const [toTable, toColumn] = columnSpec.references.split('.');
+        await dropForeign({fromTable: tableName, fromColumn: column, toTable, toColumn, transaction});
+    }
+
     return transaction.schema.table(tableName, function (table) {
         table.dropColumn(column);
     });
@@ -80,18 +97,18 @@ function dropColumn(tableName, column, transaction = db.knex) {
  */
 async function addUnique(tableName, columns, transaction = db.knex) {
     try {
-        logging.info(`Adding unique constraint for: ${columns} in table ${tableName}`);
+        logging.info(`Adding unique constraint for '${columns}' in table '${tableName}'`);
 
         return await transaction.schema.table(tableName, function (table) {
             table.unique(columns);
         });
     } catch (err) {
         if (err.code === 'SQLITE_ERROR') {
-            logging.warn(`Constraint for: ${columns} already exists for table: ${tableName}`);
+            logging.warn(`Constraint for '${columns}' already exists for table '${tableName}'`);
             return;
         }
         if (err.code === 'ER_DUP_KEYNAME') {
-            logging.warn(`Constraint for: ${columns} already exists for table: ${tableName}`);
+            logging.warn(`Constraint for '${columns}' already exists for table '${tableName}'`);
             return;
         }
         throw err;
@@ -107,18 +124,18 @@ async function addUnique(tableName, columns, transaction = db.knex) {
  */
 async function dropUnique(tableName, columns, transaction = db.knex) {
     try {
-        logging.info(`Dropping unique constraint for: ${columns} in table: ${tableName}`);
+        logging.info(`Dropping unique constraint for '${columns}' in table '${tableName}'`);
 
         return await transaction.schema.table(tableName, function (table) {
             table.dropUnique(columns);
         });
     } catch (err) {
         if (err.code === 'SQLITE_ERROR') {
-            logging.warn(`Constraint for: ${columns} does not exist for table: ${tableName}`);
+            logging.warn(`Constraint for '${columns}' does not exist for table '${tableName}'`);
             return;
         }
         if (err.code === 'ER_CANT_DROP_FIELD_OR_KEY') {
-            logging.warn(`Constraint for: ${columns} does not exist for table: ${tableName}`);
+            logging.warn(`Constraint for '${columns}' does not exist for table '${tableName}'`);
             return;
         }
         throw err;
@@ -164,7 +181,7 @@ async function addForeign({fromTable, fromColumn, toTable, toColumn, cascadeDele
     if (DatabaseInfo.isSQLite(transaction)) {
         const foreignKeyExists = await hasForeignSQLite({fromTable, fromColumn, toTable, toColumn, transaction});
         if (foreignKeyExists) {
-            logging.warn(`Skipped adding foreign key from ${fromTable}.${fromColumn} to ${toTable}.${toColumn} - foreign key already exists`);
+            logging.warn(`Skipped adding foreign key from ${fromTable}.${fromColumn} to ${toTable}.${toColumn} - already exists`);
             return;
         }
     }
@@ -195,7 +212,7 @@ async function addForeign({fromTable, fromColumn, toTable, toColumn, cascadeDele
         }
     } catch (err) {
         if (err.code === 'ER_DUP_KEY' || err.code === 'ER_FK_DUP_KEY' || err.code === 'ER_FK_DUP_NAME') {
-            logging.warn(`Skipped adding foreign key from ${fromTable}.${fromColumn} to ${toTable}.${toColumn} - foreign key already exists`);
+            logging.warn(`Skipped adding foreign key from ${fromTable}.${fromColumn} to ${toTable}.${toColumn} - already exists`);
             return;
         }
         throw err;
@@ -216,7 +233,7 @@ async function dropForeign({fromTable, fromColumn, toTable, toColumn, transactio
     if (DatabaseInfo.isSQLite(transaction)) {
         const foreignKeyExists = await hasForeignSQLite({fromTable, fromColumn, toTable, toColumn, transaction});
         if (!foreignKeyExists) {
-            logging.warn(`Skipped dropping foreign key from ${fromTable}.${fromColumn} to ${toTable}.${toColumn} - foreign key does not exist`);
+            logging.warn(`Skipped dropping foreign key from ${fromTable}.${fromColumn} to ${toTable}.${toColumn} - does not exist`);
             return;
         }
     }
@@ -243,7 +260,7 @@ async function dropForeign({fromTable, fromColumn, toTable, toColumn, transactio
         }
     } catch (err) {
         if (err.code === 'ER_CANT_DROP_FIELD_OR_KEY') {
-            logging.warn(`Skipped dropping foreign key from ${fromTable}.${fromColumn} to ${toTable}.${toColumn} - foreign key does not exist`);
+            logging.warn(`Skipped dropping foreign key from ${fromTable}.${fromColumn} to ${toTable}.${toColumn} - does not exist`);
             return;
         }
         throw err;
@@ -280,18 +297,18 @@ async function addPrimaryKey(tableName, columns, transaction = db.knex) {
     if (DatabaseInfo.isSQLite(transaction)) {
         const primaryKeyExists = await hasPrimaryKeySQLite(tableName, transaction);
         if (primaryKeyExists) {
-            logging.warn(`Primary key constraint for: ${columns} already exists for table: ${tableName}`);
+            logging.warn(`Primary key constraint for '${columns}' already exists for table '${tableName}'`);
             return;
         }
     }
     try {
-        logging.info(`Adding primary key constraint for: ${columns} in table ${tableName}`);
+        logging.info(`Adding primary key constraint for '${columns}' in table '${tableName}'`);
         return await transaction.schema.table(tableName, function (table) {
             table.primary(columns);
         });
     } catch (err) {
         if (err.code === 'ER_MULTIPLE_PRI_KEY') {
-            logging.warn(`Primary key constraint for: ${columns} already exists for table: ${tableName}`);
+            logging.warn(`Primary key constraint for '${columns}' already exists for table '${tableName}'`);
             return;
         }
         throw err;
@@ -407,6 +424,8 @@ module.exports = {
     dropForeign: dropForeign,
     addColumn: addColumn,
     dropColumn: dropColumn,
+    setNullable: setNullable,
+    dropNullable: dropNullable,
     getColumns: getColumns,
     createColumnMigration,
     // NOTE: below are exposed for testing purposes only

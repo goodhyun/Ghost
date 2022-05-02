@@ -1,9 +1,6 @@
 const debug = require('@tryghost/debug')('frontend');
 const path = require('path');
 const express = require('../../shared/express');
-const cors = require('cors');
-const {URL} = require('url');
-const errors = require('@tryghost/errors');
 const DomainEvents = require('@tryghost/domain-events');
 const {MemberPageViewEvent} = require('@tryghost/member-events');
 
@@ -11,10 +8,8 @@ const {MemberPageViewEvent} = require('@tryghost/member-events');
 const config = require('../../shared/config');
 const constants = require('@tryghost/constants');
 const storage = require('../../server/adapters/storage');
-const urlService = require('../../server/services/url');
 const urlUtils = require('../../shared/url-utils');
 const sitemapHandler = require('../services/sitemap/handler');
-const appService = require('../services/apps');
 const themeEngine = require('../services/theme-engine');
 const themeMiddleware = themeEngine.middleware;
 const membersService = require('../../server/services/members');
@@ -31,56 +26,17 @@ const STATIC_FILES_URL_PREFIX = `/${constants.STATIC_FILES_URL_PREFIX}`;
 
 let router;
 
-const corsOptionsDelegate = function corsOptionsDelegate(req, callback) {
-    const origin = req.header('Origin');
-    const corsOptions = {
-        origin: false, // disallow cross-origin requests by default
-        credentials: true // required to allow admin-client to login to private sites
-    };
-
-    if (!origin || origin === 'null') {
-        return callback(null, corsOptions);
-    }
-
-    let originUrl;
-    try {
-        originUrl = new URL(origin);
-    } catch (err) {
-        return callback(new errors.BadRequestError({err}));
-    }
-
-    // originUrl will definitely exist here because according to WHATWG URL spec
-    // The class constructor will either throw a TypeError or return a URL object
-    // https://url.spec.whatwg.org/#url-class
-
-    // allow all localhost and 127.0.0.1 requests no matter the port
-    if (originUrl.hostname === 'localhost' || originUrl.hostname === '127.0.0.1') {
-        corsOptions.origin = true;
-    }
-
-    // allow the configured host through on any protocol
-    const siteUrl = new URL(config.get('url'));
-    if (originUrl.host === siteUrl.host) {
-        corsOptions.origin = true;
-    }
-
-    // allow the configured admin:url host through on any protocol
-    if (config.get('admin:url')) {
-        const adminUrl = new URL(config.get('admin:url'));
-        if (originUrl.host === adminUrl.host) {
-            corsOptions.origin = true;
-        }
-    }
-
-    callback(null, corsOptions);
-};
-
 function SiteRouter(req, res, next) {
     router(req, res, next);
 }
 
-module.exports = function setupSiteApp(options = {}) {
-    debug('Site setup start', options);
+/**
+ *
+ * @param {import('../services/routing/router-manager').RouterConfig} routerConfig
+ * @returns {import('express').Application}
+ */
+module.exports = function setupSiteApp(routerConfig) {
+    debug('Site setup start', routerConfig);
 
     const siteApp = express('site');
 
@@ -89,7 +45,7 @@ module.exports = function setupSiteApp(options = {}) {
     siteApp.set('view engine', 'hbs');
 
     // enable CORS headers (allows admin client to hit front-end when configured on separate URLs)
-    siteApp.use(cors(corsOptionsDelegate));
+    siteApp.use(mw.cors);
 
     siteApp.use(offersService.middleware);
 
@@ -183,7 +139,7 @@ module.exports = function setupSiteApp(options = {}) {
 
     debug('General middleware done');
 
-    router = siteRoutes(options);
+    router = siteRoutes(routerConfig);
     Object.setPrototypeOf(SiteRouter, router);
 
     // Set up Frontend routes (including private blogging routes)
@@ -205,18 +161,12 @@ module.exports = function setupSiteApp(options = {}) {
     return siteApp;
 };
 
-module.exports.reload = ({apiVersion}) => {
-    // https://github.com/expressjs/express/issues/2596
-    router = siteRoutes({start: true, apiVersion});
+/**
+ * see https://github.com/expressjs/express/issues/2596
+ * @param {import('../services/routing/router-manager').RouterConfig} routerConfig
+ */
+module.exports.reload = (routerConfig) => {
+    debug('reloading');
+    router = siteRoutes(routerConfig);
     Object.setPrototypeOf(SiteRouter, router);
-
-    // re-initialize apps (register app routers, because we have re-initialized the site routers)
-    appService.init();
-
-    // connect routers and resources again
-    urlService.queue.start({
-        event: 'init',
-        tolerance: 100,
-        requiredSubscriberCount: 1
-    });
 };

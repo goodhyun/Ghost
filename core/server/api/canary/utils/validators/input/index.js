@@ -1,6 +1,12 @@
+// ESLint Override Notice
+// This is a valid index.js file - it just exports a lot of stuff!
+// Long term we would like to change the API architecture to reduce this file,
+// but that's not the problem the index.js max - line eslint "proxy" rule is there to solve.
+/* eslint-disable max-lines */
+
 module.exports = {
-    get passwordreset() {
-        return require('./passwordreset');
+    get password_reset() {
+        return require('./password_reset');
     },
 
     get setup() {

@@ -9,16 +9,16 @@ module.exports = {
         return require('./all');
     },
 
+    get default() {
+        return require('./default');
+    },
+
     get authentication() {
         return require('./authentication');
     },
 
     get db() {
         return require('./db');
-    },
-
-    get integrations() {
-        return require('./integrations');
     },
 
     get pages() {
@@ -41,16 +41,8 @@ module.exports = {
         return require('./schedules');
     },
 
-    get webhooks() {
-        return require('./webhooks');
-    },
-
     get posts() {
         return require('./posts');
-    },
-
-    get invites() {
-        return require('./invites');
     },
 
     get settings() {
@@ -77,14 +69,6 @@ module.exports = {
         return require('./tiers');
     },
 
-    get member_signin_urls() {
-        return require('./member-signin_urls');
-    },
-
-    get identities() {
-        return require('./identities');
-    },
-
     get images() {
         return require('./images');
     },
@@ -97,16 +81,12 @@ module.exports = {
         return require('./files');
     },
 
-    get tags() {
-        return require('./tags');
-    },
-
     get users() {
         return require('./users');
     },
 
-    get preview() {
-        return require('./preview');
+    get previews() {
+        return require('./previews');
     },
 
     get email_post() {
@@ -117,10 +97,6 @@ module.exports = {
         return require('./oembed');
     },
 
-    get authors() {
-        return require('./authors');
-    },
-
     get config() {
         return require('./config');
     },
@@ -129,31 +105,27 @@ module.exports = {
         return require('./themes');
     },
 
-    get actions() {
-        return require('./actions');
-    },
-
     get site() {
         return require('./site');
     },
 
-    get email_preview() {
-        return require('./email-preview');
-    },
-
-    get emails() {
-        return require('./emails');
-    },
-
-    get labels() {
-        return require('./labels');
-    },
-
-    get snippets() {
-        return require('./snippets');
-    },
-
     get custom_theme_settings() {
         return require('./custom-theme-settings');
+    },
+
+    get slack() {
+        return require('./slack');
+    },
+
+    get session() {
+        return require('./session');
+    },
+
+    get offers() {
+        return require('./offers');
+    },
+
+    get members_stripe_connect() {
+        return require('./members-stripe-connect');
     }
 };

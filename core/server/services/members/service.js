@@ -19,6 +19,7 @@ const VerificationTrigger = require('@tryghost/verification-trigger');
 const DomainEvents = require('@tryghost/domain-events');
 const {LastSeenAtUpdater} = require('@tryghost/members-events-service');
 const events = require('../../lib/common/events');
+const DatabaseInfo = require('@tryghost/database-info');
 
 const messages = {
     noLiveKeysInDevelopment: 'Cannot use live stripe keys in development. Please restart in production mode.',
@@ -37,7 +38,7 @@ const membersConfig = new MembersConfigProvider({
 const membersStats = new MembersStats({
     db: db,
     settingsCache: settingsCache,
-    isSQLite: config.get('database:client') === 'sqlite3'
+    isSQLite: DatabaseInfo.isSQLite(db.knex)
 });
 
 let membersApi;
@@ -52,22 +53,17 @@ const membersImporter = new MembersCSVImporter({
     isSet: labsService.isSet.bind(labsService),
     addJob: jobsService.addJob.bind(jobsService),
     knex: db.knex,
-    urlFor: urlUtils.urlFor.bind(urlUtils)
+    urlFor: urlUtils.urlFor.bind(urlUtils),
+    context: {
+        importer: true
+    }
 });
 
 const processImport = async (options) => {
     const result = await membersImporter.process(options);
-    const importSize = result.meta.originalImportSize;
-    delete result.meta.originalImportSize;
 
-    const importThreshold = await verificationTrigger.getImportThreshold();
-    if (importSize > importThreshold) {
-        await verificationTrigger.startVerificationProcess({
-            amountImported: importSize,
-            throwOnTrigger: true,
-            source: 'import'
-        });
-    }
+    // Check whether all imports in last 30 days > threshold
+    await verificationTrigger.testImportThreshold();
 
     return result;
 };

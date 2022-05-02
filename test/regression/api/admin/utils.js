@@ -1,14 +1,13 @@
 const url = require('url');
 const testUtils = require('../../../utils');
 
-const API_URL = '/ghost/api/canary/admin/';
+const API_URL = '/ghost/api/admin/';
 
 const expectedProperties = {
     posts: ['posts', 'meta'],
     tags: ['tags', 'meta'],
     users: ['users', 'meta'],
     settings: ['settings', 'meta'],
-    subscribers: ['subscribers', 'meta'],
     roles: ['roles'],
     pagination: ['page', 'limit', 'pages', 'total', 'next', 'prev'],
     slugs: ['slugs'],
@@ -65,7 +64,8 @@ const expectedProperties = {
         'email_subject',
         'frontmatter',
         'email_only',
-        'tiers'
+        'tiers',
+        'newsletter_id'
     ],
     user: [
         'id',
@@ -185,7 +185,7 @@ const expectedProperties = {
         'created_at',
         'updated_at'
     ],
-    email_preview: ['html', 'subject', 'plaintext']
+    email_previews: ['html', 'subject', 'plaintext']
 };
 
 module.exports = {

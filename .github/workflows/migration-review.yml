@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Create checklist comment
     steps:
-      - uses: peter-evans/create-or-update-comment@63e171afd597dc4be7b89306575bccc262e512ef
+      - uses: peter-evans/create-or-update-comment@26f07868647c398ca3d2042238c8aa620ca5d311
         with:
           issue-number: ${{ github.event.pull_request.number }}
           body: |

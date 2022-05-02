@@ -1,10 +1,10 @@
 const _ = require('lodash');
 const Promise = require('bluebird');
 const debug = require('@tryghost/debug')('services:routing:controllers:static');
-const helpers = require('../helpers');
+const renderer = require('../../rendering');
 
 function processQuery(query, locals) {
-    const api = require('../../proxy').api[locals.apiVersion];
+    const api = require('../../proxy').api;
     query = _.cloneDeep(query);
 
     // CASE: If you define a single data key for a static route (e.g. data: page.team), this static route will represent
@@ -60,12 +60,12 @@ module.exports = function staticController(req, res, next) {
                 });
             }
 
-            // @TODO: See helpers/secure for more context.
+            // @TODO: See renderer/secure for more context.
             _.each(response.data, function (data) {
-                helpers.secure(req, data);
+                renderer.secure(req, data);
             });
 
-            helpers.renderer(req, res, helpers.formatResponse.entries(response));
+            renderer.renderer(req, res, renderer.formatResponse.entries(response));
         })
-        .catch(helpers.handleError(next));
+        .catch(renderer.handleError(next));
 };

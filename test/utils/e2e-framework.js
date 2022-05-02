@@ -155,7 +155,7 @@ const getContentAPIAgent = async () => {
         const originURL = configUtils.config.get('url');
 
         return new ContentAPITestAgent(app, {
-            apiURL: '/ghost/api/canary/content/',
+            apiURL: '/ghost/api/content/',
             originURL
         });
     } catch (error) {
@@ -185,7 +185,7 @@ const getAdminAPIAgent = async (options = {}) => {
         const originURL = configUtils.config.get('url');
 
         return new AdminAPITestAgent(app, {
-            apiURL: '/ghost/api/canary/admin/',
+            apiURL: '/ghost/api/admin/',
             originURL
         });
     } catch (error) {
@@ -240,7 +240,7 @@ const getAgentsForMembers = async () => {
             originURL
         });
         adminAgent = new AdminAPITestAgent(app, {
-            apiURL: '/ghost/api/canary/admin/',
+            apiURL: '/ghost/api/admin/',
             originURL
         });
     } catch (error) {
@@ -271,7 +271,10 @@ module.exports = {
         get: getFixture,
         getCurrentOwnerUser: fixtureUtils.getCurrentOwnerUser,
         init: initFixtures,
-        restore: resetData
+        restore: resetData,
+        getPathForFixture: (fixturePath) => {
+            return path.join(__dirname, 'fixtures', fixturePath);
+        }
     },
     matchers: {
         anyString: any(String),
