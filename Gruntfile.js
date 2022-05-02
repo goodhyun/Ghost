@@ -65,7 +65,7 @@ module.exports = function (grunt) {
                     'content/themes/casper/assets/js/*.js'
                 ],
                 options: {
-                    livereload: true,
+                    livereload: 35730,
                     interval: 500
                 }
             },
@@ -83,7 +83,7 @@ module.exports = function (grunt) {
                 tasks: ['express:dev'],
                 options: {
                     spawn: false,
-                    livereload: true,
+                    livereload: 35730,
                     interval: 500
                 }
             }

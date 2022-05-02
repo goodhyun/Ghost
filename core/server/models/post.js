@@ -121,6 +121,8 @@ Post = ghostBookshelf.Model.extend({
         [
             'mobiledoc',
             'html',
+            'mobiledoc2',
+            'html2',
             'plaintext',
             'custom_excerpt',
             'codeinjection_head',
@@ -157,6 +159,13 @@ Post = ghostBookshelf.Model.extend({
                 }
             },
             html: 'htmlToTransformReady',
+            mobiledoc2: {
+                method: 'mobiledocToTransformReady',
+                options: {
+                    cardTransformers: mobiledocLib.cards
+                }
+            },
+            html2: 'htmlToTransformReady',            
             plaintext: 'plaintextToTransformReady',
             custom_excerpt: 'htmlToTransformReady',
             codeinjection_head: 'htmlToTransformReady',
@@ -624,6 +633,34 @@ Post = ghostBookshelf.Model.extend({
         ) {
             try {
                 this.set('html', mobiledocLib.mobiledocHtmlRenderer.render(JSON.parse(this.get('mobiledoc'))));
+            } catch (err) {
+                throw new errors.ValidationError({
+                    message: 'Invalid mobiledoc structure.',
+                    help: 'https://ghost.org/docs/publishing/'
+                });
+            }
+        }
+
+        if (!this.get('mobiledoc2')) {
+            this.set('mobiledoc2', JSON.stringify(mobiledocLib.blankDocument));
+        }
+
+        // If we're force re-rendering we want to make sure that all image cards
+        // have original dimensions stored in the payload for use by card renderers
+        if (options.force_rerender) {
+            this.set('mobiledoc2', await mobiledocLib.populateImageSizes(this.get('mobiledoc2')));
+        }
+
+        // CASE: mobiledoc has changed, generate html
+        // CASE: ?force_rerender=true passed via Admin API
+        // CASE: html is null, but mobiledoc exists (only important for migrations & importing)
+        if (
+            this.hasChanged('mobiledoc2')
+            || options.force_rerender
+            || (!this.get('html2') && (options.migrating || options.importing))
+        ) {
+            try {
+                this.set('html2', mobiledocLib.mobiledocHtmlRenderer.render(JSON.parse(this.get('mobiledoc2'))));
             } catch (err) {
                 throw new errors.ValidationError({
                     message: 'Invalid mobiledoc structure.',

@@ -57,9 +57,9 @@ module.exports.input = (apiConfig, apiValidators, frame) => {
         }
 
         if (apiValidators[apiConfig.docName][apiConfig.method]) {
-            tasks.push(function docNameMethod() {
-                return apiValidators[apiConfig.docName][apiConfig.method](apiConfig, frame);
-            });
+            // tasks.push(function docNameMethod() {
+            //     return apiValidators[apiConfig.docName][apiConfig.method](apiConfig, frame);
+            // });
         }
     }
 
