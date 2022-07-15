@@ -1,3 +1,18 @@
 {
-    "enableDeveloperExperiments": true
+    "enableDeveloperExperiments": true,
+
+
+    "spam": {
+
+    "user_login": {
+
+        "minWait": 60,
+
+        "maxWait": 604800000,
+
+        "freeRetries": 444
+
+    }
+
+}
 }

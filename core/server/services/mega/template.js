@@ -1250,7 +1250,7 @@ ${ templateSettings.showBadge ? `
 
                                     ${ templateSettings.showBadge ? `
                                     <tr>
-                                        <td class="footer-powered"><a href="https://ghost.org/"><img src="https://static.ghost.org/v4.0.0/images/powered.png" border="0" width="142" height="30" class="gh-powered" alt="Powered by Ghost"></a></td>
+                                        
                                     </tr>
                                     ` : '' }
                                 </table>
